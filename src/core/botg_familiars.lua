@@ -16,15 +16,59 @@ SMODS.ConsumableType {
         underscores_plural = 'Familiars'
     },
     shop_rate = 0.0,
-    collection_rows = { 4, 7 },
+    collection_rows = { 7, 7 },
     default = 'c_reality_warp_baby_needle',
     unlocked = true,
-    discovered = true
+    discovered = true,
+    create_UIBox_your_collection = function(self)
+        local pool = G.P_CENTER_POOLS and G.P_CENTER_POOLS['Familiar'] or {}
+        for _, fam in ipairs(pool) do
+            fam.unlocked = true
+            fam.discovered = true
+        end
+        local back_f = 'your_collection_other_gameobjects'
+        if G.OVERLAY_MENU and G.OVERLAY_MENU:get_UIE_by_ID('consumable_collection') then
+            back_f = 'your_collection_consumables'
+        end
+        return SMODS.card_collection_UIBox(pool, { 7, 7 }, {
+            back_func = back_f,
+            modify_card = function(card, center)
+                card.params.bypass_discovery_center = true
+                card.discovered = true
+                card.unlocked = true
+                card.debuff = false
+            end
+        })
+    end
 }
 
 if G.FUNCS then
     G.FUNCS.botg_empty_familiar_label = function(e)
         e.config.visible = (not G.botg_familiars) or (#G.botg_familiars.cards == 0)
+    end
+
+    G.FUNCS.your_collection_familiars = function(e)
+        G.SETTINGS.paused = true
+        local pool = G.P_CENTER_POOLS and G.P_CENTER_POOLS['Familiar'] or {}
+        for _, fam in ipairs(pool) do
+            fam.unlocked = true
+            fam.discovered = true
+        end
+        local back_f = 'your_collection_other_gameobjects'
+        if G.OVERLAY_MENU and G.OVERLAY_MENU:get_UIE_by_ID('consumable_collection') then
+            back_f = 'your_collection_consumables'
+        end
+        G.FUNCS.overlay_menu{
+            definition = SMODS.card_collection_UIBox(pool, { 7, 7 }, {
+                back_func = back_f,
+                modify_card = function(card, center)
+                    card.params.bypass_discovery_center = true
+                    card.discovered = true
+                    card.unlocked = true
+                    card.debuff = false
+                end
+            })
+        }
     end
 end
 
@@ -349,7 +393,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 0, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Needle',
@@ -367,7 +411,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 1, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Pillar',
@@ -385,7 +429,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 2, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Serpent',
@@ -404,7 +448,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 3, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Flint',
@@ -423,7 +467,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 4, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Hook',
@@ -442,7 +486,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 5, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Eye',
@@ -461,7 +505,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 6, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Ox',
@@ -480,7 +524,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 7, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby House',
@@ -499,7 +543,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 8, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Club',
@@ -518,7 +562,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 9, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Fish',
@@ -537,7 +581,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 10, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Window',
@@ -555,7 +599,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 11, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Manacle',
@@ -573,7 +617,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 12, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Wall',
@@ -591,7 +635,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 13, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Wheel',
@@ -610,7 +654,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 14, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Arm',
@@ -627,7 +671,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 15, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Psychic',
@@ -646,7 +690,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 16, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Goad',
@@ -665,7 +709,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 17, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Water',
@@ -682,7 +726,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 18, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Mouth',
@@ -701,7 +745,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 19, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Plant',
@@ -720,7 +764,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 20, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Head',
@@ -739,7 +783,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 21, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Tooth',
@@ -758,7 +802,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 22, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Mark',
@@ -776,7 +820,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 23, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Heart',
@@ -795,7 +839,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 24, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Bell',
@@ -814,7 +858,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 25, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Acorn',
@@ -833,7 +877,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 26, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Leaf',
@@ -852,7 +896,7 @@ SMODS.Consumable {
     set = 'Familiar',
     atlas = 'reality_warp_familiars',
     pos = { x = 27, y = 0 },
-    cost = 10, unlocked = false, discovered = false,
+    cost = 10, unlocked = true, discovered = true,
     pixel_size = { w = 34, h = 34 },
     loc_txt = {
         name = 'Baby Vessel',
@@ -927,14 +971,33 @@ local FAMILIAR_BOSS_NAMES = {
     ['c_reality_warp_baby_vessel'] = "Violet Vessel",
 }
 
-for _, k in ipairs(FAMILIAR_KEYS) do
-    local b_name = FAMILIAR_BOSS_NAMES[k] or "its Boss Blind"
-    local target = (G.P_CENTERS and G.P_CENTERS[k]) or (SMODS and SMODS.Centers and SMODS.Centers[k])
-    if target then
-        target.unlocked = false
-        target.discovered = false
-        target.unlock = { "Defeat {C:attention}" .. b_name .. "{}", "in {C:attention}1 hand{}" }
-        target.locked_loc_txt = { "Defeat {C:attention}" .. b_name .. "{}", "in {C:attention}1 hand{}" }
+local function sync_familiar_discovery()
+    if G.P_CENTER_POOLS and G.P_CENTER_POOLS['Familiar'] then
+        for _, fam in ipairs(G.P_CENTER_POOLS['Familiar']) do
+            fam.unlocked = true
+            fam.discovered = true
+        end
+    end
+    if FAMILIAR_KEYS then
+        for _, k in ipairs(FAMILIAR_KEYS) do
+            local target = (G.P_CENTERS and G.P_CENTERS[k]) or (SMODS and SMODS.Centers and SMODS.Centers[k])
+            if target then
+                target.unlocked = true
+                target.discovered = true
+            end
+        end
+    end
+    if G.DISCOVER_TALLIES and G.DISCOVER_TALLIES['familiars'] then
+        G.DISCOVER_TALLIES['familiars'] = { tally = 28, of = 28 }
+    end
+end
+sync_familiar_discovery()
+
+if set_discover_tallies then
+    local orig_set_tallies = set_discover_tallies
+    function set_discover_tallies()
+        orig_set_tallies()
+        sync_familiar_discovery()
     end
 end
 

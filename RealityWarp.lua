@@ -17,6 +17,21 @@ if reality_warp_MOD then
     G.C.reality_warp_TEXT_COL = G.C.reality_warp_TEXT_COL or { 1, 1, 1, 1 }
     reality_warp_MOD.badge_colour = G.C.reality_warp_BADGE_COL
     reality_warp_MOD.badge_text_colour = G.C.reality_warp_TEXT_COL
+
+    reality_warp_MOD.custom_collection_tabs = function()
+        local pool = (G.P_CENTER_POOLS and G.P_CENTER_POOLS['Familiar']) or {}
+        local count = #pool > 0 and #pool or 28
+        return {
+            UIBox_button({
+                button = "your_collection_familiars",
+                label = {localize("b_familiar_cards") or "Familiars"},
+                count = { tally = count, of = count },
+                minw = 5,
+                id = "your_collection_familiars",
+                colour = HEX('8B0000')
+            })
+        }
+    end
 end
 
 local files = {
@@ -37,6 +52,7 @@ local files = {
     "src/core/probability_rules.lua",
     "src/core/black_market.lua",
     "src/core/cauldron_synthesis.lua",
+    "src/core/other_modes.lua",
 
     -- Jokers
     "src/jokers/common.lua",
