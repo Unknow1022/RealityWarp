@@ -17,24 +17,27 @@ function register_reality_warp_game_mode(mode_def)
 end
 
 -- ----------------------------------------------------------------------------
--- Initial Game Modes Registration
+-- Initial Game Modes Registration with Formatted Multi-Line Text
 -- ----------------------------------------------------------------------------
 
 register_reality_warp_game_mode({
     id = 'botg',
     title = 'BATTLE OF GODS',
-    badge = 'Ante 24 Showdown',
+    badge = 'ANTE 24',
     badge_colour = HEX('B71C1C'),
-    desc = 'Ascend through 24 intense Antes facing Olympian Gods, fused boss encounters, and pantheon showdowns. Starts at Ante 1 with $100 and Colosseum bonuses.',
+    desc_lines = {
+        "Ascend through 24 grueling Antes.",
+        "Face Olympian Gods & Fused Bosses.",
+        "Starts at Ante 1 with $100 & Colosseum Deck."
+    },
     features = {
-        '24 Antes to Victory with God Bosses',
-        'Pocket Familiars Companion Slot Active',
-        'Exclusive Pantheon Booster Packs'
+        "Pocket Familiars Companion Active",
+        "Exclusive Pantheon Booster Packs"
     },
     button_label = 'PLAY NOW',
     button_colour = HEX('B71C1C'),
     button_callback = 'reality_warp_start_botg_run',
-    secondary_button_label = 'SELECT STAKE',
+    secondary_button_label = 'STAKE',
     secondary_button_colour = G.C.BLUE,
     secondary_button_callback = 'reality_warp_botg_setup_run',
     order = 1
@@ -43,13 +46,16 @@ register_reality_warp_game_mode({
 register_reality_warp_game_mode({
     id = 'nursery',
     title = 'THE NURSERY',
-    badge = '28 Familiars',
+    badge = '28 FAMILIARS',
     badge_colour = HEX('2E7D32'),
-    desc = 'Visit the interactive sanctuary of all 28 Pocket Mini-Boss Familiars. Feed, play, rest, and level up companions to boost their abilities in your runs.',
+    desc_lines = {
+        "Sanctuary for all 28 Pocket Boss Familiars.",
+        "Feed, play, rest, and bond with companions.",
+        "Level up familiars up to 5x potency."
+    },
     features = {
-        'Feed, Play, Sleep, and Pet Familiars',
-        'Levels boost familiar power up to 5x',
-        'Assign your Lead Companion for runs'
+        "Care actions: Feed, Play, Sleep, Pet",
+        "Assign lead familiar to accompany runs"
     },
     button_label = 'ENTER NURSERY',
     button_colour = HEX('2E7D32'),
@@ -60,13 +66,16 @@ register_reality_warp_game_mode({
 register_reality_warp_game_mode({
     id = 'joker_trials',
     title = 'JOKER TRIALS',
-    badge = 'Exclusive Gauntlets',
+    badge = 'GAUNTLETS',
     badge_colour = HEX('6A1B9A'),
-    desc = 'Challenge gauntlets built around unique Outsider and mod Jokers with dedicated deck configurations, special modifiers, and win conditions.',
+    desc_lines = {
+        "Gauntlets built around unique mod Jokers.",
+        "Special deck rules and win conditions.",
+        "Exclusive trial challenges and mastery."
+    },
     features = {
-        'Curated themed trial decks',
-        'Custom rules and special stakes',
-        'Unlock unique badges and mastery'
+        "Curated themed starting loadouts",
+        "Unique rules and modified stakes"
     },
     button_label = 'VIEW TRIALS',
     button_colour = HEX('6A1B9A'),
@@ -77,13 +86,16 @@ register_reality_warp_game_mode({
 register_reality_warp_game_mode({
     id = 'chronos_rift',
     title = 'CHRONOS RIFT',
-    badge = 'Coming Soon',
+    badge = 'COMING SOON',
     badge_colour = G.C.UI.BACKGROUND_INACTIVE,
-    desc = 'Temporal anomalies, dimensional glitch tears, and endless boss rush modes will be added here in upcoming Reality Warp updates.',
+    desc_lines = {
+        "Temporal anomalies & glitch dimensions.",
+        "Endless Boss Rush gauntlets.",
+        "Future game modes will unlock here."
+    },
     features = {
-        'Glitch Tear Distortions',
-        'Endless Boss Rush Chambers',
-        'Automatically expands with new modes'
+        "Glitch Tear Distortion Mode",
+        "Automatically expands with updates"
     },
     button_label = 'LOCKED',
     button_colour = G.C.UI.BACKGROUND_INACTIVE,
@@ -92,18 +104,31 @@ register_reality_warp_game_mode({
 })
 
 -- ----------------------------------------------------------------------------
--- UI Builder: Other Game Modes Hub
+-- UI Builder: Other Game Modes Hub (Compact & Proportionate)
 -- ----------------------------------------------------------------------------
 
 local function create_mode_card(mode)
+    local desc_nodes = {}
+    if mode.desc_lines then
+        for _, line in ipairs(mode.desc_lines) do
+            table.insert(desc_nodes, {
+                n = G.UIT.R,
+                config = { align = "cm", padding = 0.01 },
+                nodes = {
+                    { n = G.UIT.T, config = { text = line, scale = 0.25, colour = G.C.UI.TEXT_LIGHT, shadow = true } }
+                }
+            })
+        end
+    end
+
     local feat_nodes = {}
     if mode.features then
         for _, feat in ipairs(mode.features) do
             table.insert(feat_nodes, {
                 n = G.UIT.R,
-                config = { align = "cl", padding = 0.02 },
+                config = { align = "cl", padding = 0.01 },
                 nodes = {
-                    { n = G.UIT.T, config = { text = "• " .. feat, scale = 0.26, colour = G.C.WHITE } }
+                    { n = G.UIT.T, config = { text = "• " .. feat, scale = 0.23, colour = G.C.WHITE, shadow = true } }
                 }
             })
         end
@@ -115,10 +140,10 @@ local function create_mode_card(mode)
             label = { mode.button_label },
             button = mode.button_callback,
             colour = mode.button_colour or G.C.RED,
-            minw = mode.secondary_button_label and 2.4 or 4.6,
-            minh = 0.65,
-            scale = 0.34,
-            emboss = 0.08,
+            minw = mode.secondary_button_label and 1.85 or 3.8,
+            minh = 0.52,
+            scale = 0.3,
+            emboss = 0.06,
             col = true
         }))
     end
@@ -127,10 +152,10 @@ local function create_mode_card(mode)
             label = { mode.secondary_button_label },
             button = mode.secondary_button_callback,
             colour = mode.secondary_button_colour or G.C.BLUE,
-            minw = 2.4,
-            minh = 0.65,
-            scale = 0.34,
-            emboss = 0.08,
+            minw = 1.85,
+            minh = 0.52,
+            scale = 0.3,
+            emboss = 0.06,
             col = true
         }))
     end
@@ -139,49 +164,61 @@ local function create_mode_card(mode)
         n = G.UIT.C,
         config = {
             align = "cm",
-            padding = 0.1,
-            r = 0.12,
+            padding = 0.06,
+            r = 0.1,
             colour = G.C.L_BLACK,
-            minw = 5.6,
-            minh = 3.6,
-            emboss = 0.06,
-            outline = 1.5,
+            minw = 4.35,
+            maxw = 4.45,
+            minh = 2.4,
+            emboss = 0.05,
+            outline = 1.2,
             outline_colour = G.C.BLACK
         },
         nodes = {
             -- Title & Badge Row
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.04 },
+                config = { align = "cm", padding = 0.03 },
                 nodes = {
-                    { n = G.UIT.T, config = { text = mode.title, scale = 0.44, colour = mode.badge_colour or G.C.WHITE } },
+                    { n = G.UIT.T, config = { text = mode.title, scale = 0.34, colour = mode.badge_colour or G.C.WHITE, shadow = true } },
+                    { n = G.UIT.B, config = { w = 0.1, h = 0.1 } },
                     {
                         n = G.UIT.C,
-                        config = { align = "cm", padding = 0.06, r = 0.08, colour = mode.badge_colour or G.C.RED, minw = 1.4, minh = 0.3 },
+                        config = { align = "cm", padding = 0.04, r = 0.06, colour = mode.badge_colour or G.C.RED, minw = 1.0, minh = 0.22 },
                         nodes = {
-                            { n = G.UIT.T, config = { text = mode.badge or "MODE", scale = 0.22, colour = G.C.WHITE } }
+                            { n = G.UIT.T, config = { text = mode.badge or "MODE", scale = 0.2, colour = G.C.WHITE, shadow = true } }
                         }
                     }
                 }
             },
-            -- Description
+            -- Description lines
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.04, minw = 5.2 },
+                config = { align = "cm", padding = 0.02 },
                 nodes = {
-                    { n = G.UIT.T, config = { text = mode.desc, scale = 0.27, colour = G.C.UI.TEXT_LIGHT } }
+                    {
+                        n = G.UIT.C,
+                        config = { align = "cm" },
+                        nodes = desc_nodes
+                    }
                 }
             },
             -- Bullet points / Features
             {
                 n = G.UIT.R,
-                config = { align = "cl", padding = 0.04, minw = 5.2 },
-                nodes = feat_nodes
+                config = { align = "cl", padding = 0.02 },
+                nodes = {
+                    {
+                        n = G.UIT.C,
+                        config = { align = "cl" },
+                        nodes = feat_nodes
+                    }
+                }
             },
             -- Action Buttons
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.06 },
+                config = { align = "cm", padding = 0.04 },
                 nodes = action_buttons
             }
         }
@@ -205,14 +242,14 @@ function create_UIBox_reality_warp_other_modes()
     if #row1_nodes > 0 then
         table.insert(grid_nodes, {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.08 },
+            config = { align = "cm", padding = 0.04 },
             nodes = row1_nodes
         })
     end
     if #row2_nodes > 0 then
         table.insert(grid_nodes, {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.08 },
+            config = { align = "cm", padding = 0.04 },
             nodes = row2_nodes
         })
     end
@@ -222,22 +259,28 @@ function create_UIBox_reality_warp_other_modes()
         contents = {
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.08 },
+                config = { align = "cm", padding = 0.04 },
                 nodes = {
-                    { n = G.UIT.T, config = { text = "SPECIAL GAME MODES", scale = 0.72, colour = G.C.GOLD } }
+                    { n = G.UIT.T, config = { text = "SPECIAL GAME MODES", scale = 0.52, colour = G.C.GOLD, shadow = true } }
                 }
             },
             {
                 n = G.UIT.R,
                 config = { align = "cm", padding = 0.02 },
                 nodes = {
-                    { n = G.UIT.T, config = { text = "Exclusive Reality Warp challenges, chambers, and companion sanctuaries", scale = 0.32, colour = G.C.UI.TEXT_LIGHT } }
+                    { n = G.UIT.T, config = { text = "Exclusive Reality Warp challenges, chambers, and companion sanctuaries", scale = 0.28, colour = G.C.UI.TEXT_LIGHT } }
                 }
             },
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.08 },
-                nodes = grid_nodes
+                config = { align = "cm", padding = 0.04 },
+                nodes = {
+                    {
+                        n = G.UIT.C,
+                        config = { align = "cm", minw = 9.1, maxw = 9.3 },
+                        nodes = grid_nodes
+                    }
+                }
             }
         }
     })
@@ -362,14 +405,17 @@ if create_UIBox_main_menu_buttons then
                 local other_btn = UIBox_button({
                     id = "reality_warp_other_modes_button",
                     minh = 1.55,
-                    minw = 1.85,
+                    minw = 1.7,
                     col = true,
                     button = "reality_warp_open_other_modes",
                     label = {"OTHER"},
                     colour = HEX('8B0000')
                 })
-                -- Insert at position 2 (directly beside PLAY button)
                 table.insert(buttons, 2, other_btn)
+            end
+            -- Adjust container padding so all 6 buttons fit cleanly without overlapping Profile
+            if menu.nodes[1].nodes[1].config then
+                menu.nodes[1].nodes[1].config.padding = 0.08
             end
         end
         return menu
