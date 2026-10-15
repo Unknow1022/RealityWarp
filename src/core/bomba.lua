@@ -81,7 +81,107 @@ end
 
 G.FUNCS = G.FUNCS or {}
 
+local function create_bomba_warning_UIBox()
+    return create_UIBox_generic_options({
+        back_func = 'reality_warp_open_other_modes',
+        contents = {
+            {
+                n = G.UIT.R,
+                config = { align = "cm", padding = 0.08 },
+                nodes = {
+                    { n = G.UIT.T, config = { text = "PHOTOSENSITIVITY WARNING", scale = 0.52, colour = HEX('ef4444'), shadow = true } }
+                }
+            },
+            {
+                n = G.UIT.R,
+                config = { align = "cm", padding = 0.04 },
+                nodes = {
+                    {
+                        n = G.UIT.C,
+                        config = {
+                            align = "cm",
+                            padding = 0.15,
+                            r = 0.1,
+                            colour = G.C.L_BLACK,
+                            minw = 6.8,
+                            maxw = 7.4,
+                            outline = 1.5,
+                            outline_colour = HEX('ef4444')
+                        },
+                        nodes = {
+                            {
+                                n = G.UIT.R,
+                                config = { align = "cm", padding = 0.03 },
+                                nodes = {
+                                    { n = G.UIT.T, config = { text = "FLASHING LIGHTS & EPILEPSY NOTICE", scale = 0.35, colour = G.C.GOLD, shadow = true } }
+                                }
+                            },
+                            {
+                                n = G.UIT.R,
+                                config = { align = "cm", padding = 0.03 },
+                                nodes = {
+                                    { n = G.UIT.T, config = { text = "Time Bomb mode contains continuous pulsating red lights and rapid visual flashes.", scale = 0.28, colour = G.C.WHITE } }
+                                }
+                            },
+                            {
+                                n = G.UIT.R,
+                                config = { align = "cm", padding = 0.03 },
+                                nodes = {
+                                    { n = G.UIT.T, config = { text = "If you have a history of epilepsy, seizures, or light sensitivity, please exercise caution.", scale = 0.26, colour = G.C.UI.TEXT_LIGHT } }
+                                }
+                            },
+                            {
+                                n = G.UIT.R,
+                                config = { align = "cm", padding = 0.03 },
+                                nodes = {
+                                    { n = G.UIT.T, config = { text = "You can cancel now or choose to proceed if you feel comfortable.", scale = 0.26, colour = G.C.UI.TEXT_LIGHT } }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                n = G.UIT.R,
+                config = { align = "cm", padding = 0.1 },
+                nodes = {
+                    UIBox_button({
+                        button = 'reality_warp_open_other_modes',
+                        label = { "CANCEL" },
+                        colour = G.C.GREY,
+                        minw = 2.4,
+                        minh = 0.6,
+                        scale = 0.4,
+                        col = true
+                    }),
+                    { n = G.UIT.B, config = { w = 0.35, h = 0.1 } },
+                    UIBox_button({
+                        button = 'reality_warp_confirm_start_bomba_run',
+                        label = { "PROCEED" },
+                        colour = HEX('dc2626'),
+                        minw = 2.4,
+                        minh = 0.6,
+                        scale = 0.4,
+                        col = true
+                    })
+                }
+            }
+        }
+    })
+end
+
 G.FUNCS.reality_warp_start_bomba_run = function(e)
+    G.SETTINGS.paused = true
+    if create_UIBox_generic_options and G.FUNCS and G.FUNCS.overlay_menu then
+        G.FUNCS.overlay_menu{
+            definition = create_bomba_warning_UIBox()
+        }
+    else
+        G.FUNCS.reality_warp_confirm_start_bomba_run(e)
+    end
+end
+
+G.FUNCS.reality_warp_confirm_start_bomba_run = function(e)
     G.SETTINGS.paused = false
     if G.OVERLAY_MENU then
         G.FUNCS.exit_overlay_menu()
@@ -92,6 +192,11 @@ G.FUNCS.reality_warp_start_bomba_run = function(e)
     G.bomba_timer = 50.0
     G.bomba_timer_adding = 0
     G.bomba_last_real_time = nil
+    G.bomba_tick_timer = 0
+    G.bomba_pulse_phase = 0
+    G.bomba_cur_speed = 2.2
+    G.bomba_cur_min_a = 0.02
+    G.bomba_cur_max_a = 0.12
 
     local chosen_deck, chosen_sleeve = get_random_bomba_deck_and_sleeve()
     local run_args = {
@@ -269,11 +374,6 @@ function Game:update(dt)
     if not is_active then return end
     G.bomba_active = true
 
-    if G.SETTINGS.paused or (G.OVERLAY_MENU and not G.OVERLAY_MENU.REMOVED) then
-        G.bomba_last_real_time = nil
-        return
-    end
-
     -- Real unscaled delta calculation (immune to game speed)
     local cur_real = (G.TIMERS and G.TIMERS.REAL) or (love.timer and love.timer.getTime()) or 0
     if not G.bomba_last_real_time then G.bomba_last_real_time = cur_real end
@@ -283,34 +383,71 @@ function Game:update(dt)
         real_delta = (love.timer and love.timer.getDelta()) or dt
     end
 
+    -- Continuous Pulse Integration (fluid breathing wave without phase jumps)
+    local timer = G.bomba_timer or 50.0
+    local target_rad_speed = 2.2
+    local target_min_a = 0.02
+    local target_max_a = 0.12
+    if timer < 10 then
+        local p = math.max(0, math.min(1, (10 - timer) / 10))
+        target_rad_speed = 4.5 + p * 3.5
+        target_min_a = 0.06 + p * 0.06
+        target_max_a = 0.22 + p * 0.14
+    elseif timer < 25 then
+        local p = (25 - timer) / 15
+        target_rad_speed = 2.2 + p * 2.3
+        target_min_a = 0.02 + p * 0.04
+        target_max_a = 0.12 + p * 0.10
+    end
+
+    G.bomba_cur_speed = G.bomba_cur_speed or target_rad_speed
+    G.bomba_cur_speed = G.bomba_cur_speed + (target_rad_speed - G.bomba_cur_speed) * math.min(1, real_delta * 4.0)
+
+    G.bomba_cur_min_a = (G.bomba_cur_min_a or target_min_a) + (target_min_a - (G.bomba_cur_min_a or target_min_a)) * math.min(1, real_delta * 4.0)
+    G.bomba_cur_max_a = (G.bomba_cur_max_a or target_max_a) + (target_max_a - (G.bomba_cur_max_a or target_max_a)) * math.min(1, real_delta * 4.0)
+
+    G.bomba_pulse_phase = ((G.bomba_pulse_phase or 0) + G.bomba_cur_speed * real_delta) % (2 * math.pi)
+
+    if G.SETTINGS.paused or (G.OVERLAY_MENU and not G.OVERLAY_MENU.REMOVED) then
+        return
+    end
+
     -- 1. Rapidly count up added time (+40s on round win or +10s purchase) while playing wartimerup
     if G.bomba_timer_adding and G.bomba_timer_adding > 0 then
-        local add_speed = 36.0 -- 40s ticks up rapidly in ~1.1s
+        local add_speed = 32.0 -- 40s ticks up in ~1.25s
         local add_step = math.min(G.bomba_timer_adding, add_speed * real_delta)
         G.bomba_timer = (G.bomba_timer or 0) + add_step
         G.bomba_timer_adding = G.bomba_timer_adding - add_step
         if G.GAME then G.GAME.bomba_timer = G.bomba_timer end
 
-        G.bomba_up_sound_timer = (G.bomba_up_sound_timer or 0) + real_delta
-        if G.bomba_up_sound_timer >= 1.2 and G.bomba_timer_adding > 0 then
+        if not G.bomba_up_playing then
+            G.bomba_up_playing = true
             G.bomba_up_sound_timer = 0
             play_bomba_sound('wartimerup', 1.0, 0.70)
+        else
+            G.bomba_up_sound_timer = (G.bomba_up_sound_timer or 0) + real_delta
+            if G.bomba_up_sound_timer >= 0.75 then
+                G.bomba_up_sound_timer = 0
+                play_bomba_sound('wartimerup', 1.0, 0.70)
+            end
         end
     else
         G.bomba_timer_adding = 0
         G.bomba_up_sound_timer = nil
+        G.bomba_up_playing = nil
     end
 
-    -- 2. Timer counts down only when in an active round (playing hands / discarding)
-    local round_active = (G.STATE == G.STATES.SELECTING_HAND or G.STATE == G.STATES.HAND_PLAYED or G.STATE == G.STATES.DRAW_TO_HAND)
-    if round_active then
-        local prev_sec = math.floor(G.bomba_timer or 0)
+    -- 2. Timer counts down only during active match gameplay (not in shop, blind select, etc.)
+    local s = G.STATE
+    local in_match = (s == G.STATES.SELECTING_HAND or s == G.STATES.HAND_PLAYED or s == G.STATES.DRAW_TO_HAND or s == G.STATES.PLAY_TAROT)
+    if in_match then
         G.bomba_timer = math.max(0, (G.bomba_timer or 50.0) - real_delta)
         if G.GAME then G.GAME.bomba_timer = G.bomba_timer end
-        local cur_sec = math.floor(G.bomba_timer)
 
-        -- Wartimer: single beep per second with the bomb (30% volume)
-        if cur_sec < prev_sec and cur_sec >= 0 then
+        -- Wartimer: single beep per second with the bomb (30% volume) in a steady 1.0s loop
+        G.bomba_tick_timer = (G.bomba_tick_timer or 0) + real_delta
+        if G.bomba_tick_timer >= 1.0 then
+            G.bomba_tick_timer = G.bomba_tick_timer - 1.0
             play_bomba_sound('wartimer', 1.0, 0.30)
         end
 
@@ -330,6 +467,8 @@ function Game:update(dt)
                 })
             end
         end
+    else
+        G.bomba_tick_timer = 0
     end
 end
 
@@ -337,10 +476,75 @@ end
 -- Render Pass: Continuous Red Pulsing Background & Digital Bomb HUD
 -- ----------------------------------------------------------------------------
 
+local function render_bomba_background()
+    local is_active = G.bomba_active or (G.GAME and G.GAME.bomba_active)
+    if not is_active then return end
+
+    local s = G.STATE
+    local in_match = (s == G.STATES.SELECTING_HAND or s == G.STATES.HAND_PLAYED or s == G.STATES.DRAW_TO_HAND or s == G.STATES.PLAY_TAROT)
+    if not in_match then return end
+
+    local cw, ch = nil, nil
+    if G.CANVAS then
+        cw, ch = G.CANVAS:getDimensions()
+    end
+    if not cw or not ch then
+        cw = (love.graphics and love.graphics.getWidth()) or 1536
+        ch = (love.graphics and love.graphics.getHeight()) or 864
+    end
+
+    love.graphics.push('all')
+    love.graphics.origin()
+    love.graphics.setShader()
+
+    -- 1. Fluid Red Flashing Background Pulse (rendered exclusively on background, behind cards & UI)
+    local wave = 0.5 - 0.5 * math.cos(G.bomba_pulse_phase or 0)
+    local pulse = wave * wave * (3 - 2 * wave) -- smoothstep easing
+    local min_a = G.bomba_cur_min_a or 0.02
+    local max_a = G.bomba_cur_max_a or 0.12
+    local red_alpha = min_a + pulse * (max_a - min_a)
+
+    -- Soft base ambient wash directly over the background
+    love.graphics.setBlendMode('alpha')
+    love.graphics.setColor(0.92, 0.08, 0.12, red_alpha * 0.70)
+    love.graphics.rectangle('fill', 0, 0, cw, ch)
+
+    -- Subtle incandescent additive bloom over the background
+    love.graphics.setBlendMode('add', 'alphamultiply')
+    love.graphics.setColor(1.0, 0.15, 0.15, red_alpha * 0.35)
+    love.graphics.rectangle('fill', 0, 0, cw, ch)
+
+    -- Multi-layer smooth vignette border on background
+    love.graphics.setBlendMode('alpha')
+    love.graphics.setColor(0.85, 0.05, 0.08, red_alpha * 0.85)
+    love.graphics.setLineWidth(14)
+    love.graphics.rectangle('line', 7, 7, cw - 14, ch - 14)
+
+    love.graphics.setColor(0.85, 0.05, 0.08, red_alpha * 0.40)
+    love.graphics.setLineWidth(28)
+    love.graphics.rectangle('line', 14, 14, cw - 28, ch - 28)
+
+    love.graphics.pop()
+end
+
+if Sprite and Sprite.draw then
+    local orig_sprite_draw = Sprite.draw
+    function Sprite:draw(overlay)
+        orig_sprite_draw(self, overlay)
+        if self == G.SPLASH_BACK then
+            render_bomba_background()
+        end
+    end
+end
+
 local function render_bomba_overlay()
     local is_active = G.bomba_active or (G.GAME and G.GAME.bomba_active)
     if not is_active then return end
     G.bomba_active = true
+
+    if G.STATE == G.STATES.SPLASH or (G.STAGE and G.STAGE ~= G.STAGES.RUN) or G.STATE == G.STATES.GAME_OVER then
+        return
+    end
 
     local cur_t = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
     if G.rw_bomba_last_draw_time and math.abs(cur_t - G.rw_bomba_last_draw_time) < 0.0001 then
@@ -351,31 +555,12 @@ local function render_bomba_overlay()
     local sw = (love.graphics and love.graphics.getWidth()) or 1536
     local sh = (love.graphics and love.graphics.getHeight()) or 864
     local mx, my = love.mouse.getPosition()
-    local t = cur_t
     local timer = G.bomba_timer or 50.0
 
     love.graphics.push('all')
     love.graphics.origin()
     love.graphics.setShader()
 
-    -- 1. Red Flashing Background Pulse
-    local freq = (timer <= 10) and 8.0 or ((timer <= 25) and 4.5 or 2.2)
-    local min_a = (timer <= 10) and 0.12 or ((timer <= 25) and 0.06 or 0.03)
-    local max_a = (timer <= 10) and 0.38 or ((timer <= 25) and 0.22 or 0.13)
-    local pulse = (math.sin(t * freq) * 0.5 + 0.5)
-    local red_alpha = min_a + pulse * (max_a - min_a)
-
-    love.graphics.setBlendMode('add', 'alphamultiply')
-    love.graphics.setColor(0.95, 0.12, 0.12, red_alpha)
-    love.graphics.rectangle('fill', 0, 0, sw, sh)
-
-    -- Red edge vignette border
-    love.graphics.setBlendMode('alpha')
-    love.graphics.setColor(0.85, 0.05, 0.05, red_alpha * 0.75)
-    love.graphics.setLineWidth(12)
-    love.graphics.rectangle('line', 6, 6, sw - 12, sh - 12)
-
-    -- 2. Digital Countdown HUD & Interactive "+10s ($1)" Button (Top Center)
     local hud_w = 265
     local hud_h = 42
     local hud_x = sw * 0.5 - hud_w * 0.5
