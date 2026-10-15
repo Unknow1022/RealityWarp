@@ -554,6 +554,23 @@ if localize then
                         end
                     end
                 end
+            elseif (args.type == 'other' or args.type == 'Other') and args.key and G.localization and G.localization.descriptions and G.localization.descriptions.Other then
+                local target = G.localization.descriptions.Other[args.key]
+                if target and type(target) == 'table' and not target.text_parsed then
+                    target.text_parsed = {}
+                    if target.text and type(target.text) == 'table' then
+                        for _, line in ipairs(target.text) do
+                            target.text_parsed[#target.text_parsed + 1] = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, control = {} } }
+                        end
+                    end
+                    if not target.name_parsed and target.name then
+                        target.name_parsed = {}
+                        local names = type(target.name) == 'table' and target.name or { target.name }
+                        for _, line in ipairs(names) do
+                            target.name_parsed[#target.name_parsed + 1] = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, control = {} } }
+                        end
+                    end
+                end
             end
         end
         local res = orig_localize(args, misc_cat)

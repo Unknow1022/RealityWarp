@@ -520,6 +520,23 @@ local STAKE_STICKER_DESCS = {
     celestial = { name = "Celestial Sticker", stake = "Celestial Stake" },
 }
 
+local function parse_mod_loc_entry(entry)
+    if not entry then return end
+    entry.text_parsed = {}
+    if entry.text then
+        for _, line in ipairs(entry.text) do
+            entry.text_parsed[#entry.text_parsed + 1] = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, control = {} } }
+        end
+    end
+    entry.name_parsed = {}
+    if entry.name then
+        local names = type(entry.name) == 'table' and entry.name or { entry.name }
+        for _, line in ipairs(names) do
+            entry.name_parsed[#entry.name_parsed + 1] = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, control = {} } }
+        end
+    end
+end
+
 local function register_mod_stake_sticker_loc()
     if not G.localization or not G.localization.descriptions then return end
     G.localization.descriptions.Other = G.localization.descriptions.Other or {}
@@ -531,6 +548,7 @@ local function register_mod_stake_sticker_loc()
                 "{C:attention}" .. v.stake .. "{} difficulty"
             }
         }
+        parse_mod_loc_entry(entry)
         G.localization.descriptions.Other[k .. '_sticker'] = entry
         G.localization.descriptions.Other['reality_warp_' .. k .. '_sticker'] = entry
         G.localization.descriptions.Other['stake_reality_warp_' .. k .. '_sticker'] = entry
