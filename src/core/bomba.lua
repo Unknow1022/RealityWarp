@@ -249,7 +249,7 @@ G.FUNCS.reality_warp_buy_bomba_time = function(e)
 end
 
 -- ----------------------------------------------------------------------------
--- Blind Victory Hook: +40 Seconds Per Won Round
+-- Blind Victory Hook: +20 Seconds Per Won Round
 -- ----------------------------------------------------------------------------
 
 if Blind and Blind.defeat then
@@ -257,11 +257,11 @@ if Blind and Blind.defeat then
     function Blind:defeat(silent)
         if (G.bomba_active or (G.GAME and G.GAME.bomba_active)) and not self.reality_warp_bomba_rewarded then
             self.reality_warp_bomba_rewarded = true
-            G.bomba_timer_adding = (G.bomba_timer_adding or 0) + 40
+            G.bomba_timer_adding = (G.bomba_timer_adding or 0) + 20
             play_bomba_sound('wartimerup', 1.0, 0.75)
             if attention_text then
                 attention_text({
-                    text = '+40s DEFUSED!',
+                    text = '+20s DEFUSED!',
                     scale = 0.85,
                     hold = 2.0,
                     backdrop_colour = HEX('22c55e'),

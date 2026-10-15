@@ -113,11 +113,11 @@ register_reality_warp_game_mode({
         "A ticking time bomb threatens the table.",
         "Pulsing red alert flashes across the room.",
         "Start with 50 seconds to win the round.",
-        "Blind victory adds +40s; buy time at $1 for +10s."
+        "Blind victory adds +20s; buy time at $1 for +10s."
     },
     features = {
         "Continuous Red Alert Pulsing Screen",
-        "50s Round Timer (+40s per Blind Won)",
+        "50s Round Timer (+20s per Blind Won)",
         "Emergency Time Purchase: $1 = +10s"
     },
     button_label = 'PLAY TIME BOMB',
