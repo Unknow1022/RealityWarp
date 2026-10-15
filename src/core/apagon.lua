@@ -32,11 +32,66 @@ end
 
 local fire_loop_source = nil
 
+local function silence_game_for_apagon()
+    if G.SETTINGS and G.SETTINGS.SOUND then
+        if not G.apagon_prev_sound_settings then
+            G.apagon_prev_sound_settings = {
+                volume = G.SETTINGS.SOUND.volume,
+                music_volume = G.SETTINGS.SOUND.music_volume,
+                game_sounds_volume = G.SETTINGS.SOUND.game_sounds_volume
+            }
+        end
+        G.SETTINGS.SOUND.volume = 0
+        G.SETTINGS.SOUND.music_volume = 0
+        G.SETTINGS.SOUND.game_sounds_volume = 0
+
+        if G.SOUND_MANAGER and G.SOUND_MANAGER.channel then
+            pcall(function()
+                G.SOUND_MANAGER.channel:push({
+                    type = 'modulate',
+                    desired_track = '',
+                    dt = 0.01,
+                    sound_settings = G.SETTINGS.SOUND,
+                    pitch_mod = 1.0,
+                    splash_vol = 0
+                })
+            end)
+        end
+    end
+end
+
+local function restore_apagon_sound()
+    if G.apagon_prev_sound_settings and G.SETTINGS and G.SETTINGS.SOUND then
+        G.SETTINGS.SOUND.volume = G.apagon_prev_sound_settings.volume or 100
+        G.SETTINGS.SOUND.music_volume = G.apagon_prev_sound_settings.music_volume or 100
+        G.SETTINGS.SOUND.game_sounds_volume = G.apagon_prev_sound_settings.game_sounds_volume or 100
+        local restored_settings = G.SETTINGS.SOUND
+        G.apagon_prev_sound_settings = nil
+
+        if G.SOUND_MANAGER and G.SOUND_MANAGER.channel then
+            pcall(function()
+                G.SOUND_MANAGER.channel:push({
+                    type = 'modulate',
+                    dt = 0.5,
+                    sound_settings = restored_settings,
+                    pitch_mod = 1.0
+                })
+            end)
+        end
+    end
+end
+
 local function start_fire_loop()
-    if fire_loop_source and fire_loop_source:isPlaying() then return end
+    if fire_loop_source and fire_loop_source:isPlaying() then
+        pcall(function() fire_loop_source:setVolume(1.0) end)
+        return
+    end
     if not fire_loop_source then
         local mod = (SMODS and (SMODS.current_mod or (SMODS.Mods and SMODS.Mods["reality_warp"])))
         local mod_path = (mod and mod.path) or ""
+        if mod_path ~= "" and not mod_path:match("[/\\]$") then
+            mod_path = mod_path .. "/"
+        end
         local candidates = {
             mod_path .. "assets/sounds/fire_loop.mp3",
             "assets/sounds/fire_loop.mp3",
@@ -47,6 +102,16 @@ local function start_fire_loop()
             if ok and src then
                 fire_loop_source = src
                 break
+            end
+            if NFS and NFS.newFileData then
+                local ok_fd, fd = pcall(NFS.newFileData, path)
+                if ok_fd and fd then
+                    local ok_s, src_nfs = pcall(love.audio.newSource, fd, "stream")
+                    if ok_s and src_nfs then
+                        fire_loop_source = src_nfs
+                        break
+                    end
+                end
             end
             if NFS and NFS.read then
                 local ok2, data = pcall(NFS.read, 'data', path)
@@ -63,11 +128,11 @@ local function start_fire_loop()
     if fire_loop_source then
         pcall(function()
             fire_loop_source:setLooping(true)
-            fire_loop_source:setVolume(0.50)
+            fire_loop_source:setVolume(1.0)
             fire_loop_source:play()
         end)
     else
-        pcall(play_sound, 'fire_loop', 1.0, 0.5)
+        pcall(play_sound, 'fire_loop', 1.0, 1.0)
     end
 end
 
@@ -77,6 +142,7 @@ local function stop_fire_loop()
             fire_loop_source:stop()
         end)
     end
+    restore_apagon_sound()
 end
 
 -- ----------------------------------------------------------------------------
@@ -198,19 +264,7 @@ function Game:start_run(args)
         G.apagon_particles = {}
         G.apagon_dissolve_particles = {}
 
-        -- Immediately silence in-game music for Apagón run
-        if G.SOUND_MANAGER and G.SOUND_MANAGER.channel then
-            pcall(function()
-                G.SOUND_MANAGER.channel:push({
-                    type = 'modulate',
-                    desired_track = '',
-                    dt = 1.0,
-                    sound_settings = (G.SETTINGS and G.SETTINGS.SOUND) or { volume = 100, music_volume = 100, game_sounds_volume = 100 },
-                    pitch_mod = 1.0,
-                    splash_vol = 0
-                })
-            end)
-        end
+        silence_game_for_apagon()
     else
         stop_fire_loop()
         G.apagon_active = false
@@ -266,6 +320,14 @@ if modulate_sound then
     end
 end
 
+if love and love.quit then
+    local orig_love_quit = love.quit
+    love.quit = function(...)
+        restore_apagon_sound()
+        return orig_love_quit(...)
+    end
+end
+
 -- ----------------------------------------------------------------------------
 -- Ghost Spawner: 1 in 3 Chance Per Selected Blind
 -- ----------------------------------------------------------------------------
@@ -295,19 +357,7 @@ local function spawn_apagon_ghost()
     pcall(play_sound, 'whoosh1', 0.85, 0.6)
 end
 
-if Blind and Blind.set_blind then
-    local orig_blind_set_blind = Blind.set_blind
-    function Blind:set_blind(blind, reset, silent)
-        local ret = orig_blind_set_blind(self, blind, reset, silent)
-        local is_active = G.apagon_active or (G.GAME and G.GAME.apagon_active)
-        if not reset and is_active then
-            if math.random(1, 3) == 1 then
-                spawn_apagon_ghost()
-            end
-        end
-        return ret
-    end
-end
+-- Ghost Spawner moved to real-time 30-second interval in Game:update
 
 -- ----------------------------------------------------------------------------
 -- Game Update Loop: Flashlight & Ghost Spawning / Banishment
@@ -326,6 +376,8 @@ function Game:update(dt)
 
     if G.SETTINGS.paused then return end
 
+    local sw = (love.graphics and love.graphics.getWidth()) or 1536
+    local sh = (love.graphics and love.graphics.getHeight()) or 864
     local mx, my = love.mouse.getPosition()
     local t = love.timer and love.timer.getTime() or 0
 
@@ -405,7 +457,7 @@ function Game:update(dt)
     end
 
     -- 3. Update Ghosts & Check Lantern Collision
-    local lantern_radius = 215 + math.sin(t * 4.0) * 8
+    local lantern_radius = 265 + math.sin(t * 4.0) * 10
     local flee_range = lantern_radius * 1.55
 
     for i = #G.apagon_ghosts, 1, -1 do
@@ -496,6 +548,16 @@ function Game:update(dt)
                 end
                 table.remove(G.apagon_ghosts, i)
             end
+        end
+    end
+
+    -- 4. Ghost Spawner: 1 in 3 chance every 30 real unscaled seconds (unaffected by game speed)
+    local real_dt = (love.timer and love.timer.getDelta()) or dt
+    G.apagon_spawn_timer = (G.apagon_spawn_timer or 0) + real_dt
+    if G.apagon_spawn_timer >= 30 then
+        G.apagon_spawn_timer = G.apagon_spawn_timer - 30
+        if math.random(1, 3) == 1 then
+            spawn_apagon_ghost()
         end
     end
 
@@ -643,7 +705,7 @@ local function render_apagon_overlay()
     local sw, sh = love.graphics.getDimensions()
     local mx, my = love.mouse.getPosition()
     local t = cur_t
-    local lantern_radius = 215 + math.sin(t * 4.0) * 8
+    local lantern_radius = 265 + math.sin(t * 4.0) * 10
 
     love.graphics.push('all')
     love.graphics.origin()

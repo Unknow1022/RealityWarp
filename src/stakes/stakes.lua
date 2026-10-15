@@ -305,8 +305,25 @@ if SMODS and SMODS.get_new_blind then
     end
 end
 
--- Palettes for Stake Fire Effect (Dominant Color + Hot Core)
+-- Palettes for Stake & Sticker Fire Effect (Dominant Color + Hot Core)
 local STAKE_FIRE_COLORS = {
+    -- Vanilla Stakes & Stickers
+    ['white']                      = { r = 0.95, g = 0.95, b = 0.95, core = {1.0, 1.0, 1.0} },
+    ['stake_white']                = { r = 0.95, g = 0.95, b = 0.95, core = {1.0, 1.0, 1.0} },
+    ['red']                        = { r = 0.95, g = 0.28, b = 0.28, core = {1.0, 0.70, 0.40} },
+    ['stake_red']                  = { r = 0.95, g = 0.28, b = 0.28, core = {1.0, 0.70, 0.40} },
+    ['blue']                       = { r = 0.25, g = 0.55, b = 0.95, core = {0.70, 0.90, 1.00} },
+    ['stake_blue']                 = { r = 0.25, g = 0.55, b = 0.95, core = {0.70, 0.90, 1.00} },
+    ['black']                      = { r = 0.30, g = 0.30, b = 0.36, core = {0.80, 0.35, 0.95} },
+    ['stake_black']                = { r = 0.30, g = 0.30, b = 0.36, core = {0.80, 0.35, 0.95} },
+    ['purple']                     = { r = 0.68, g = 0.30, b = 0.92, core = {0.92, 0.70, 1.00} },
+    ['stake_purple']               = { r = 0.68, g = 0.30, b = 0.92, core = {0.92, 0.70, 1.00} },
+    ['orange']                     = { r = 0.96, g = 0.55, b = 0.15, core = {1.00, 0.90, 0.45} },
+    ['stake_orange']               = { r = 0.96, g = 0.55, b = 0.15, core = {1.00, 0.90, 0.45} },
+    ['gold']                       = { r = 0.98, g = 0.82, b = 0.22, core = {1.00, 1.00, 0.70} },
+    ['stake_gold']                 = { r = 0.98, g = 0.82, b = 0.22, core = {1.00, 1.00, 0.70} },
+
+    -- Reality Warp Custom Stakes & Stickers
     ['stake_reality_warp_diamond'] = { r = 0.37, g = 0.92, b = 0.83, core = {0.85, 1.0, 0.95} },
     ['reality_warp_diamond']       = { r = 0.37, g = 0.92, b = 0.83, core = {0.85, 1.0, 0.95} },
     ['diamond']                    = { r = 0.37, g = 0.92, b = 0.83, core = {0.85, 1.0, 0.95} },
@@ -346,72 +363,90 @@ local STAKE_FIRE_COLORS = {
     ['stake_reality_warp_celestial']= { r = 0.85, g = 0.71, b = 0.89, core = {0.65, 0.92, 1.0} },
     ['reality_warp_celestial']     = { r = 0.85, g = 0.71, b = 0.89, core = {0.65, 0.92, 1.0} },
     ['celestial']                  = { r = 0.85, g = 0.71, b = 0.89, core = {0.65, 0.92, 1.0} },
+
+    -- Ability Stickers
+    ['eternal']                    = { r = 0.58, g = 0.22, b = 0.88, core = {1.0, 0.88, 0.35} },
+    ['perishable']                 = { r = 0.20, g = 0.72, b = 0.92, core = {0.80, 1.0, 1.0} },
+    ['rental']                     = { r = 0.95, g = 0.75, b = 0.15, core = {0.45, 1.0, 0.65} },
+    ['weakened']                   = { r = 0.58, g = 0.64, b = 0.72, core = {0.90, 0.92, 0.98} },
 }
+
+local function get_stake_fire_color(k)
+    if not k then return nil end
+    if type(k) == 'number' then
+        local vanilla = {'white', 'red', 'blue', 'black', 'purple', 'orange', 'gold'}
+        k = (G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake and G.P_CENTER_POOLS.Stake[k] and G.P_CENTER_POOLS.Stake[k].key) or vanilla[k] or tostring(k)
+    end
+    k = tostring(k)
+    if STAKE_FIRE_COLORS[k] then return STAKE_FIRE_COLORS[k] end
+    local clean = k:gsub('^stake_reality_warp_', ''):gsub('^reality_warp_', ''):gsub('^stake_', ''):gsub('_sticker$', '')
+    return STAKE_FIRE_COLORS[clean] or STAKE_FIRE_COLORS['stake_' .. clean] or STAKE_FIRE_COLORS['stake_reality_warp_' .. clean]
+end
 
 local function draw_stake_fire(x, y, w, h, col)
     if not love or not love.graphics or not col then return end
     local t = love.timer and love.timer.getTime() or 0
     local cx = x + w * 0.5
     local cy = y + h * 0.5
-    local base_r = math.min(w, h) * 0.48
+    local base_r = math.min(w, h) * 0.50
 
     love.graphics.push('all')
     love.graphics.setBlendMode('add', 'alphamultiply')
 
     -- 1. Outer dynamic flame tongues dancing around perimeter
-    local num_flames = 12
+    local num_flames = 14
     for i = 1, num_flames do
-        local angle = (i / num_flames) * math.pi * 2 + math.sin(t * 1.8 + i) * 0.12
-        local flicker = math.sin(t * 6.0 + i * 2.1) * 0.30 + math.cos(t * 9.5 - i * 1.5) * 0.15
-        local upward_bias = -math.sin(angle) * 0.12
-        local flame_len = base_r * (1.10 + 0.25 * flicker + upward_bias)
+        local angle = (i / num_flames) * math.pi * 2 + math.sin(t * 2.2 + i) * 0.14
+        local flicker = math.sin(t * 7.0 + i * 2.1) * 0.30 + math.cos(t * 11.0 - i * 1.5) * 0.15
+        local upward_bias = -math.sin(angle) * 0.15
+        local flame_len = base_r * (1.18 + 0.30 * flicker + upward_bias)
 
         local fx = cx + math.cos(angle) * flame_len
         local fy = cy + math.sin(angle) * flame_len
 
         local tangent = angle + math.pi * 0.5
-        local hw = base_r * 0.20
-        local bx1 = cx + math.cos(angle) * (base_r * 0.85) + math.cos(tangent) * hw
-        local by1 = cy + math.sin(angle) * (base_r * 0.85) + math.sin(tangent) * hw
-        local bx2 = cx + math.cos(angle) * (base_r * 0.85) - math.cos(tangent) * hw
-        local by2 = cy + math.sin(angle) * (base_r * 0.85) - math.cos(tangent) * hw
+        local hw = base_r * 0.22
+        local bx1 = cx + math.cos(angle) * (base_r * 0.80) + math.cos(tangent) * hw
+        local by1 = cy + math.sin(angle) * (base_r * 0.80) + math.sin(tangent) * hw
+        local bx2 = cx + math.cos(angle) * (base_r * 0.80) - math.cos(tangent) * hw
+        local by2 = cy + math.sin(angle) * (base_r * 0.80) - math.cos(tangent) * hw
 
-        love.graphics.setColor(col.r, col.g, col.b, 0.35 + 0.15 * math.sin(t * 4.5 + i))
+        love.graphics.setColor(col.r, col.g, col.b, 0.60 + 0.20 * math.sin(t * 4.5 + i))
         love.graphics.polygon('fill', bx1, by1, fx, fy, bx2, by2)
 
         local core_c = col.core or {1, 1, 1}
         local core_fx = cx + math.cos(angle) * (flame_len * 0.65)
         local core_fy = cy + math.sin(angle) * (flame_len * 0.65)
-        love.graphics.setColor(core_c[1], core_c[2], core_c[3], 0.50 + 0.2 * math.cos(t * 5.5 + i))
+        love.graphics.setColor(core_c[1], core_c[2], core_c[3], 0.75 + 0.20 * math.cos(t * 5.5 + i))
         love.graphics.polygon('fill', bx1, by1, core_fx, core_fy, bx2, by2)
     end
 
     -- 2. Radial flame glow rings
     for ring = 1, 3 do
-        local r_mult = 1.0 + ring * 0.07 + math.sin(t * 3.5 + ring) * 0.03
-        local alpha = (0.25 / ring) * (0.8 + 0.2 * math.sin(t * 2.8 + ring * 1.2))
+        local r_mult = 1.0 + ring * 0.08 + math.sin(t * 3.5 + ring) * 0.04
+        local alpha = (0.35 / ring) * (0.8 + 0.2 * math.sin(t * 2.8 + ring * 1.2))
         love.graphics.setColor(col.r, col.g, col.b, alpha)
         love.graphics.circle('fill', cx, cy, base_r * r_mult, 32)
     end
 
     -- 3. Drifting sparks/embers
-    for spark = 1, 5 do
-        local st = (t * 1.6 + spark * 1.618) % 1.0
-        local s_angle = (spark * 1.25) + math.sin(t + spark) * 0.4
-        local s_dist = base_r * (0.92 + st * 0.45)
+    for spark = 1, 8 do
+        local st = (t * 1.5 + spark * 0.618) % 1.0
+        local s_angle = (spark * 0.785) + math.sin(t * 1.2 + spark) * 0.4
+        local s_dist = base_r * (0.90 + st * 0.60)
         local sx = cx + math.cos(s_angle) * s_dist
-        local sy = cy + math.sin(s_angle) * s_dist - (st * base_r * 0.25)
-        local s_size = (1.0 - st) * (base_r * 0.07)
-        local s_alpha = (1.0 - st) * 0.65
+        local sy = cy + math.sin(s_angle) * s_dist - (st * base_r * 0.35)
+        local s_size = (1.0 - st) * (base_r * 0.12)
+        local s_alpha = (1.0 - st) * 0.85
         local core_c = col.core or {1, 1, 1}
         love.graphics.setColor(core_c[1], core_c[2], core_c[3], s_alpha)
-        love.graphics.circle('fill', sx, sy, s_size, 8)
+        love.graphics.circle('fill', sx, sy, math.max(0.015, s_size), 8)
     end
 
     love.graphics.pop()
 end
 
--- Hook: Scale Big Stake texture & Draw custom dominant color Fire Effect
+-- Hook: Scale Big Stake texture & Draw custom dominant color Fire Effect on stake sprite
 if get_stake_sprite then
     local orig_get_stake_sprite = get_stake_sprite
     function get_stake_sprite(_stake, _scale)
@@ -419,7 +454,7 @@ if get_stake_sprite then
         local stake_key = nil
         if _stake and G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake and G.P_CENTER_POOLS.Stake[_stake] then
             stake_key = G.P_CENTER_POOLS.Stake[_stake].key
-        elseif type(_stake) == 'string' then
+        elseif type(_stake) == 'string' or type(_stake) == 'number' then
             stake_key = _stake
         end
         if stake_key == 'stake_reality_warp_big' or stake_key == 'stake_big' or stake_key == 'big' then
@@ -429,15 +464,19 @@ if get_stake_sprite then
             _scale = (_scale or 1) * 1.3
         end
         local sprite = orig_get_stake_sprite(_stake, _scale)
-        local fire_col = STAKE_FIRE_COLORS[stake_key]
+        local fire_col = get_stake_fire_color(stake_key)
         if fire_col and sprite then
-            local orig_sprite_draw = sprite.draw
-            sprite.draw = function(_sprite)
-                draw_stake_fire(_sprite.VT.x, _sprite.VT.y, _sprite.VT.w, _sprite.VT.h, fire_col)
-                if orig_sprite_draw then
-                    orig_sprite_draw(_sprite)
+            local orig_sprite_draw_self = sprite.draw_self
+            sprite.draw_self = function(_sprite, overlay, ...)
+                if prep_draw then
+                    prep_draw(_sprite, 1)
+                    draw_stake_fire(0, 0, _sprite.T.w, _sprite.T.h, fire_col)
+                    love.graphics.pop()
+                end
+                if orig_sprite_draw_self then
+                    return orig_sprite_draw_self(_sprite, overlay, ...)
                 else
-                    Sprite.draw(_sprite)
+                    return Sprite.draw_self(_sprite, overlay, ...)
                 end
             end
         end
@@ -448,32 +487,77 @@ end
 -- Hook: Draw fire effect on stake tower cards and stake stickers on cards
 local card_draw_stake_fire_ref = Card.draw
 function Card:draw(layer)
-    if layer == 'card' and self.params and self.params.run_select_stake_tower then
+    if (layer == 'card' or layer == 'both' or not layer) and self.params and self.params.run_select_stake_tower then
         local st_info = self.params.run_select_stake_tower
         local stake_k = st_info[2]
-        local fire_col = STAKE_FIRE_COLORS[stake_k]
-        if fire_col then
-            draw_stake_fire(self.VT.x, self.VT.y, self.VT.w, self.VT.h, fire_col)
+        local fire_col = get_stake_fire_color(stake_k)
+        if fire_col and prep_draw then
+            prep_draw(self, 1)
+            draw_stake_fire(0, 0, self.T.w, self.T.h, fire_col)
+            love.graphics.pop()
         end
     end
+
     card_draw_stake_fire_ref(self, layer)
 
-    -- Draw fire particles on stake stickers attached to cards/jokers/decks
-    if (layer == 'card' or layer == 'both' or not layer) and self.children and self.children.center then
-        local st = self.sticker or ((self.sticker_run and self.sticker_run ~= 'NONE') and G.SETTINGS and G.SETTINGS.run_stake_stickers and self.sticker_run)
+    -- Draw fire particles on stake win stickers and ability stickers attached to cards
+    if (layer == 'card' or layer == 'both' or not layer) and prep_draw then
+        local st = self.sticker
+        if not st and self.config and self.config.center and get_joker_win_sticker then
+            st = get_joker_win_sticker(self.config.center)
+        end
+        if not st and self.sticker_run and self.sticker_run ~= 'NONE' and G.SETTINGS and G.SETTINGS.run_stake_stickers then
+            st = self.sticker_run
+        end
         if st then
-            local fire_col = STAKE_FIRE_COLORS[st]
-            if not fire_col then
-                local stripped = string.gsub(tostring(st), '_sticker$', '')
-                fire_col = STAKE_FIRE_COLORS[stripped]
-            end
+            local fire_col = get_stake_fire_color(st)
             if fire_col then
-                local center = self.children.center
-                local sw = center.VT.w * 0.55
-                local sh = center.VT.h * 0.55
-                local sx = center.VT.x + center.VT.w * 0.5 - sw * 0.5
-                local sy = center.VT.y + center.VT.h * 0.28 - sh * 0.5
+                prep_draw(self, 1)
+                local sw = self.T.w * 0.38
+                local sh = self.T.h * 0.38
+                local sx = self.T.w * 0.5 - sw * 0.5
+                local sy = self.T.h * 0.18 - sh * 0.5
                 draw_stake_fire(sx, sy, sw, sh, fire_col)
+                love.graphics.pop()
+            end
+        end
+
+        if self.ability then
+            if self.ability.eternal then
+                local fire_col = get_stake_fire_color('eternal')
+                if fire_col then
+                    prep_draw(self, 1)
+                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
+                    draw_stake_fire(self.T.w * 0.82 - sw * 0.5, self.T.h * 0.16 - sh * 0.5, sw, sh, fire_col)
+                    love.graphics.pop()
+                end
+            end
+            if self.ability.perishable then
+                local fire_col = get_stake_fire_color('perishable')
+                if fire_col then
+                    prep_draw(self, 1)
+                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
+                    draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.16 - sh * 0.5, sw, sh, fire_col)
+                    love.graphics.pop()
+                end
+            end
+            if self.ability.rental then
+                local fire_col = get_stake_fire_color('rental')
+                if fire_col then
+                    prep_draw(self, 1)
+                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
+                    draw_stake_fire(self.T.w * 0.82 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
+                    love.graphics.pop()
+                end
+            end
+            if self.ability.weakened then
+                local fire_col = get_stake_fire_color('weakened')
+                if fire_col then
+                    prep_draw(self, 1)
+                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
+                    draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
+                    love.graphics.pop()
+                end
             end
         end
     end
