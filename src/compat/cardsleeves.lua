@@ -725,3 +725,55 @@ if Card and Card.hover then
         return orig_card_hover(self)
     end
 end
+
+-- ----------------------------------------------------------------------------
+-- CardSleeves trigger_effect nil safety guard
+-- ----------------------------------------------------------------------------
+
+if CardSleeves and CardSleeves.Sleeve then
+    CardSleeves.Sleeve.trigger_effect = CardSleeves.Sleeve.trigger_effect or function(self, args) end
+    if CardSleeves.Sleeve.obj_table then
+        for _, s in pairs(CardSleeves.Sleeve.obj_table) do
+            if type(s) == 'table' and not s.trigger_effect then
+                s.trigger_effect = function(self, args) end
+            end
+        end
+    end
+end
+
+if Card and Card.set_base then
+    local orig_card_set_base = Card.set_base
+    function Card:set_base(card, initial)
+        if CardSleeves and CardSleeves.Sleeve then
+            if not CardSleeves.Sleeve.trigger_effect then
+                CardSleeves.Sleeve.trigger_effect = function(self, args) end
+            end
+            if CardSleeves.Sleeve.obj_table then
+                for _, s in pairs(CardSleeves.Sleeve.obj_table) do
+                    if type(s) == 'table' and not s.trigger_effect then
+                        s.trigger_effect = function(self, args) end
+                    end
+                end
+            end
+        end
+        if G and G.P_CENTERS then
+            for _, c in pairs(G.P_CENTERS) do
+                if type(c) == 'table' and (c.set == 'Sleeve' or c.original_key) and not c.trigger_effect then
+                    c.trigger_effect = function(self, args) end
+                end
+            end
+        end
+        if G and G.P_CENTER_POOLS and G.P_CENTER_POOLS['Sleeve'] then
+            for _, c in ipairs(G.P_CENTER_POOLS['Sleeve']) do
+                if type(c) == 'table' and not c.trigger_effect then
+                    c.trigger_effect = function(self, args) end
+                end
+            end
+        end
+        if G and G.GAME and G.GAME.selected_sleeve and type(G.GAME.selected_sleeve) == 'table' and not G.GAME.selected_sleeve.trigger_effect then
+            G.GAME.selected_sleeve.trigger_effect = function(self, args) end
+        end
+        return orig_card_set_base(self, card, initial)
+    end
+end
+

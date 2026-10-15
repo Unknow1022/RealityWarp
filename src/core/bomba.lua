@@ -59,15 +59,17 @@ local function get_random_bomba_deck_and_sleeve()
     end
     local chosen_deck = available_decks[math.random(#available_decks)]
     local chosen_sleeve = nil
-    if CardSleeves and CardSleeves.Sleeve then
+    if CardSleeves and CardSleeves.Sleeve and G.P_CENTER_POOLS and G.P_CENTER_POOLS['Sleeve'] then
         local available_sleeves = {}
-        for _, s in pairs(CardSleeves.Sleeve.obj_table or {}) do
-            if s.unlocked ~= false and s.key then
-                table.insert(available_sleeves, s.key)
+        for _, center in ipairs(G.P_CENTER_POOLS['Sleeve']) do
+            if center and center.key and center.key ~= 'sleeve_casl_none' then
+                if center.unlocked ~= false then
+                    table.insert(available_sleeves, center.key)
+                end
             end
         end
         if #available_sleeves > 0 then
-            chosen_sleeve = available_sleeves[math.random(#available_sleeves)]
+            chosen_sleeve = available_sleeves[math.random(1, #available_sleeves)]
         end
     end
     return chosen_deck, chosen_sleeve
@@ -100,7 +102,6 @@ G.FUNCS.reality_warp_start_bomba_run = function(e)
     if chosen_sleeve then
         run_args.casl_sleeve_choice = chosen_sleeve
         run_args.sleeve = chosen_sleeve
-        if G.GAME then G.GAME.selected_sleeve = chosen_sleeve end
         G.viewed_sleeve = chosen_sleeve
         G._last_selected_sleeve = chosen_sleeve
     end
@@ -204,7 +205,7 @@ function Game:start_run(args)
             if args and args.deck and G.P_CENTERS and G.P_CENTERS[args.deck] and Back then
                 self.GAME.selected_back = Back(G.P_CENTERS[args.deck])
             end
-            if args and args.casl_sleeve_choice then
+            if args and args.casl_sleeve_choice and not self.GAME.selected_sleeve then
                 self.GAME.selected_sleeve = args.casl_sleeve_choice
             end
         end

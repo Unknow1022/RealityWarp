@@ -235,7 +235,6 @@ G.FUNCS.reality_warp_start_apagon_run = function(e)
     if chosen_sleeve then
         run_args.casl_sleeve_choice = chosen_sleeve
         run_args.sleeve = chosen_sleeve
-        if G.GAME then G.GAME.selected_sleeve = chosen_sleeve end
         G.viewed_sleeve = chosen_sleeve
         G._last_selected_sleeve = chosen_sleeve
     end
@@ -270,7 +269,7 @@ function Game:start_run(args)
             if args and args.deck and G.P_CENTERS and G.P_CENTERS[args.deck] and Back then
                 self.GAME.selected_back = Back(G.P_CENTERS[args.deck])
             end
-            if args and args.casl_sleeve_choice then
+            if args and args.casl_sleeve_choice and not self.GAME.selected_sleeve then
                 self.GAME.selected_sleeve = args.casl_sleeve_choice
             end
         end
