@@ -1305,33 +1305,6 @@ function Card:update(dt)
     if self.config and self.config.center and self.config.center.update and type(self.config.center.update) == 'function' then
         self.config.center:update(self, dt)
     end
-    if self.area and self.area == G.jokers and not self.debuff and G.STATE and (G.STATE == G.STATES.SELECTING_HAND or G.STATE == G.STATES.HAND_PLAYED) then
-        local key = (self.config and self.config.center and (self.config.center.key or self.config.center_key)) or ""
-        local hands_played = (G.GAME and G.GAME.current_round and G.GAME.current_round.hands_played) or 0
-        local discards_used = (G.GAME and G.GAME.current_round and G.GAME.current_round.discards_used) or 0
-
-        local should_tremble = false
-        if key == 'j_reality_warp_bluxdir' and hands_played == 0 then
-            should_tremble = true
-        elseif (key == 'j_reality_warp_extended_hand' or key == 'j_reality_warp_mano_extendida') and discards_used == 0 then
-            should_tremble = true
-        elseif (key == 'j_dna' or key == 'j_trading_card' or key == 'j_sixth_sense' or key == 'j_seance' or key == 'j_superposition') and hands_played == 0 then
-            should_tremble = true
-        elseif key == 'j_luchador' or key == 'j_diet_cola' or key == 'j_invisible' then
-            should_tremble = true
-        elseif key == 'j_mr_bones' and G.GAME and G.GAME.blind and G.GAME.blind.boss then
-            should_tremble = true
-        elseif self.ability and (self.ability.first_hand or self.ability.single_use or self.ability.tremble_active) then
-            should_tremble = true
-        end
-
-        if should_tremble and G.TIMERS and G.TIMERS.REAL then
-            if not self.last_tremble_time or (G.TIMERS.REAL - self.last_tremble_time > 0.42) then
-                self.last_tremble_time = G.TIMERS.REAL
-                self:juice_up(0.06, 0.03)
-            end
-        end
-    end
 end
 
 local add_tag_ref = add_tag

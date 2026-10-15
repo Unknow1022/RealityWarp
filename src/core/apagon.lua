@@ -19,6 +19,16 @@ local JOKER_GHOST_KEYS = {
     'j_mystic_summit', 'j_marble', 'j_loyalty_card', 'j_dusk', 'j_fibonacci'
 }
 
+local BOSS_JOKER_GHOST_KEYS = {
+    'j_baron',      -- Baron (Rare: Victorian noble suit)
+    'j_vampire',    -- Vampire (Uncommon: vampire cape & count suit)
+    'j_space',      -- Space Joker (Uncommon: astronaut suit)
+    'j_showman',    -- Showman (Uncommon: ringmaster suit & top hat)
+    'j_matador',    -- Matador (Uncommon: bullfighter costume)
+    'j_burglar',    -- Burglar (Uncommon: masked burglar suit)
+    'j_troubadour', -- Troubadour (Uncommon: medieval minstrel costume)
+}
+
 -- ----------------------------------------------------------------------------
 -- Audio: fire_loop Registration & Continuous Loop Controller
 -- ----------------------------------------------------------------------------
@@ -349,21 +359,25 @@ local function spawn_apagon_ghost()
     -- Spawn in deep shadows far from mouse cursor
     local gx = (mx < sw * 0.5) and (sw - math.random(80, 220)) or math.random(80, 220)
     local gy = (my < sh * 0.5) and (sh - math.random(100, 220)) or math.random(110, 230)
-    local j_key = JOKER_GHOST_KEYS[math.random(#JOKER_GHOST_KEYS)]
+    local is_boss = (math.random(1, 8) == 1)
+    local j_key = is_boss and BOSS_JOKER_GHOST_KEYS[math.random(#BOSS_JOKER_GHOST_KEYS)]
+        or JOKER_GHOST_KEYS[math.random(#JOKER_GHOST_KEYS)]
+    local max_hp = is_boss and 2.5 or 1.0
 
     table.insert(G.apagon_ghosts, {
         x = gx,
         y = gy,
-        vx = (math.random() - 0.5) * 50,
-        vy = (math.random() - 0.5) * 50,
+        vx = (math.random() - 0.5) * (is_boss and 70 or 45),
+        vy = (math.random() - 0.5) * (is_boss and 70 or 45),
         key = j_key,
-        health = 1.0,
-        max_health = 1.0,
+        is_boss = is_boss,
+        health = max_hp,
+        max_health = max_hp,
         seed = math.random(1, 99999),
         hover_time = 0
     })
-    pcall(play_sound, 'whoosh1', 0.85, 0.6)
-    pcall(play_sound, 'foil1', 0.75, 0.7)
+    pcall(play_sound, 'whoosh1', 0.85, 0.10)
+    pcall(play_sound, 'foil1', 0.75, 0.10)
 end
 
 -- Ghost Spawner moved to real-time 30-second interval in Game:update
@@ -471,8 +485,9 @@ function Game:update(dt)
     end
 
     -- 3. Update Ghosts & Check Lantern Collision
-    local lantern_radius = 265 + math.sin(t * 4.0) * 10
-    local flee_range = lantern_radius * 1.15
+    local lantern_radius = 220 + math.sin(t * 4.0) * 8
+    local damage_radius = lantern_radius * 0.60
+    local flee_range = lantern_radius * 1.05
 
     for i = #G.apagon_ghosts, 1, -1 do
         local g = G.apagon_ghosts[i]
@@ -480,14 +495,16 @@ function Game:update(dt)
         local dy = g.y - my
         local dist = math.sqrt(dx * dx + dy * dy)
 
-        -- Flee and hide from the player's flashlight beam into darkness
+        -- Flee and hide from the player's flashlight beam into darkness (Boss ghosts move faster)
+        local base_flee = g.is_boss and 215 or 145
+        local max_speed = g.is_boss and 220 or 150
         if dist < flee_range and dist > 1 then
             local flee_intensity = (1 - (dist / flee_range))
-            local flee_speed = flee_intensity * 220
+            local flee_speed = flee_intensity * base_flee
             local nx = dx / dist
             local ny = dy / dist
-            local lateral_x = -ny * math.sin(t * 4.5 + g.seed) * 80
-            local lateral_y = nx * math.sin(t * 4.5 + g.seed) * 80
+            local lateral_x = -ny * math.sin(t * 4.5 + g.seed) * (g.is_boss and 75 or 55)
+            local lateral_y = nx * math.sin(t * 4.5 + g.seed) * (g.is_boss and 75 or 55)
             g.vx = g.vx + (nx * flee_speed + lateral_x) * dt
             g.vy = g.vy + (ny * flee_speed + lateral_y) * dt
         else
@@ -496,12 +513,12 @@ function Game:update(dt)
         end
 
         local cur_speed = math.sqrt(g.vx * g.vx + g.vy * g.vy)
-        if cur_speed > 230 then
-            g.vx = (g.vx / cur_speed) * 230
-            g.vy = (g.vy / cur_speed) * 230
-        elseif cur_speed < 20 then
+        if cur_speed > max_speed then
+            g.vx = (g.vx / cur_speed) * max_speed
+            g.vy = (g.vy / cur_speed) * max_speed
+        elseif cur_speed < (g.is_boss and 25 or 15) then
             local dir = (g.vx >= 0) and 1 or -1
-            g.vx = dir * 30
+            g.vx = dir * (g.is_boss and 35 or 20)
         end
 
         g.x = g.x + g.vx * dt
@@ -524,27 +541,29 @@ function Game:update(dt)
             g.vy = -math.abs(g.vy) * 0.8
         end
 
-        -- Shining lantern drains ghost health
-        if dist <= lantern_radius then
-            local intensity = math.max(0.25, 1 - (dist / lantern_radius))
-            g.health = g.health - (dt / 1.35) * (0.5 + 0.8 * intensity)
+        -- Shining lantern inner impact core slowly drains ghost health; closer to center = more health lost
+        if dist <= damage_radius then
+            local center_factor = math.max(0, 1 - (dist / damage_radius))
+            local drain_rate = 0.10 + 0.35 * (center_factor * center_factor)
+            g.health = g.health - dt * drain_rate
             g.hover_time = g.hover_time + dt
             table.insert(G.apagon_dissolve_particles, {
                 x = g.x + math.random(-25, 25),
                 y = g.y + math.random(-25, 25),
-                vx = math.random(-40, 40),
-                vy = math.random(-60, 20),
-                life = 0.35 + math.random() * 0.25,
-                max_life = 0.5,
-                size = math.random(3, 6),
-                col = {0.45, 0.85, 1.0}
+                vx = math.random(-35, 35),
+                vy = math.random(-50, 15),
+                life = 0.30 + math.random() * 0.20,
+                max_life = 0.45,
+                size = math.random(2, 5),
+                col = g.is_boss and {0.95, 0.20, 0.25} or {0.45, 0.85, 1.0}
             })
 
             -- Ghost vanished!
             if g.health <= 0 then
-                pcall(play_sound, 'tarot1', 1.4, 0.8)
-                pcall(play_sound, 'holo1', 1.3, 0.75)
-                for _ = 1, 18 do
+                pcall(play_sound, 'tarot1', 1.4, 0.10)
+                pcall(play_sound, 'holo1', 1.3, 0.10)
+                local burst_count = g.is_boss and 32 or 18
+                for _ = 1, burst_count do
                     table.insert(G.apagon_dissolve_particles, {
                         x = g.x + math.random(-20, 20),
                         y = g.y + math.random(-20, 20),
@@ -553,7 +572,11 @@ function Game:update(dt)
                         life = 0.5 + math.random() * 0.4,
                         max_life = 0.7,
                         size = math.random(4, 8),
-                        col = ({
+                        col = g.is_boss and ({
+                            {0.95, 0.18, 0.22},
+                            {1.00, 0.35, 0.15},
+                            {0.80, 0.08, 0.12}
+                        })[math.random(1, 3)] or ({
                             {0.65, 0.95, 1.0},
                             {0.30, 0.65, 0.95},
                             {1.00, 0.95, 0.80}
@@ -618,7 +641,7 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
         love.graphics.translate(g.x, g.y)
         love.graphics.rotate(math.sin(t * 3.0 + g.seed) * 0.08)
 
-        local scale = 0.85 + math.sin(t * 4.0 + g.seed) * 0.04
+        local scale = (g.is_boss and 1.05 or 0.85) + math.sin(t * 4.0 + g.seed) * 0.04
 
         local center = G.P_CENTERS and G.P_CENTERS[g.key]
         local atlas = (G.ANIMATION_ATLAS and G.ANIMATION_ATLAS[center and center.atlas or 'Joker'])
@@ -645,53 +668,91 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
             -- Fade in visibility progressively as light touches the ghost
             local light_factor = math.max(0.25, 1 - (dist / lantern_radius))
             love.graphics.setBlendMode('add', 'alphamultiply')
-            love.graphics.setColor(0.35, 0.75, 0.95, 0.65 * light_factor)
-            love.graphics.circle('fill', 0, 0, 46 * scale, 32)
+            if g.is_boss then
+                love.graphics.setColor(0.95, 0.18, 0.22, 0.60 * light_factor)
+            else
+                love.graphics.setColor(0.35, 0.75, 0.95, 0.45 * light_factor)
+            end
+            love.graphics.circle('fill', 0, 0, (g.is_boss and 52 or 44) * scale, 32)
 
             -- Health bar when taking damage under lantern
-            if g.health < 1.0 then
+            local max_hp = g.max_health or 1.0
+            if g.health < max_hp then
                 love.graphics.setBlendMode('alpha')
                 love.graphics.setColor(0.1, 0.1, 0.1, 0.85 * light_factor)
-                love.graphics.rectangle('fill', -26, -52, 52, 7, 2)
-                love.graphics.setColor(0.9, 0.2, 0.2, 0.95 * light_factor)
-                love.graphics.rectangle('fill', -26, -52, 52 * math.max(0, g.health), 7, 2)
-                love.graphics.setColor(1, 1, 1, 0.9 * light_factor)
-                love.graphics.rectangle('line', -26, -52, 52, 7, 2)
+                local bar_w = g.is_boss and 62 or 52
+                local bar_h = g.is_boss and 8 or 7
+                local bar_x = -bar_w * 0.5
+                local bar_y = g.is_boss and -58 or -52
+                love.graphics.rectangle('fill', bar_x, bar_y, bar_w, bar_h, 2)
+                if g.is_boss then
+                    love.graphics.setColor(0.95, 0.12, 0.12, 0.95 * light_factor)
+                else
+                    love.graphics.setColor(0.9, 0.2, 0.2, 0.95 * light_factor)
+                end
+                love.graphics.rectangle('fill', bar_x, bar_y, bar_w * math.max(0, g.health / max_hp), bar_h, 2)
+                if g.is_boss then
+                    love.graphics.setColor(1.0, 0.45, 0.45, 0.95 * light_factor)
+                else
+                    love.graphics.setColor(1, 1, 1, 0.9 * light_factor)
+                end
+                love.graphics.rectangle('line', bar_x, bar_y, bar_w, bar_h, 2)
             end
 
+            -- Render Joker with ghost shader (Boss ghosts have distinctive crimson red tint)
             love.graphics.setBlendMode('alpha')
-            love.graphics.setColor(0.90, 0.96, 1.0, 0.95 * light_factor)
+            if g.is_boss then
+                love.graphics.setColor(1.0, 0.32, 0.32, light_factor)
+            else
+                love.graphics.setColor(1, 1, 1, light_factor)
+            end
+
+            local sh = G.SHADERS and (G.SHADERS['reality_warp_ghost'] or G.SHADERS['ghost'])
+            local shader_applied = false
+            if sh and atlas and atlas.image then
+                pcall(function()
+                    if sh:hasUniform('time') then sh:send('time', t) end
+                    if sh:hasUniform('ghost') then sh:send('ghost', { 0.5, t }) end
+                    if sh:hasUniform('dissolve') then sh:send('dissolve', 0.0) end
+                    if sh:hasUniform('shadow') then sh:send('shadow', false) end
+                    if sh:hasUniform('burn_colour_1') then sh:send('burn_colour_1', {0, 0, 0, 0}) end
+                    if sh:hasUniform('burn_colour_2') then sh:send('burn_colour_2', {0, 0, 0, 0}) end
+                    if sh:hasUniform('texture_details') then
+                        local pos_x = (center and center.pos and center.pos.x) or 0
+                        local pos_y = (center and center.pos and center.pos.y) or 0
+                        local px = atlas.px or 71
+                        local py = atlas.py or 95
+                        sh:send('texture_details', { pos_x, pos_y, px, py })
+                    end
+                    if sh:hasUniform('image_details') then
+                        local iw, ih = atlas.image:getDimensions()
+                        sh:send('image_details', { iw, ih })
+                    end
+                    love.graphics.setShader(sh)
+                    shader_applied = true
+                end)
+            end
+
             if q and atlas and atlas.image then
                 love.graphics.draw(atlas.image, q, -35 * scale, -48 * scale, 0, scale, scale)
             else
-                love.graphics.setColor(0.7, 0.9, 1.0, 0.92 * light_factor)
+                love.graphics.setColor(g.is_boss and 0.95 or 0.5, g.is_boss and 0.22 or 0.8, g.is_boss and 0.22 or 0.95, 0.85 * light_factor)
                 love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
+            end
+
+            if shader_applied then
+                love.graphics.setShader()
             end
         else
-            -- Outside lantern: clearly visible glowing spectral phantom in the dark
+            -- Outside lantern: only small subtle illumination (Boss has glowing crimson red illumination)
             love.graphics.setBlendMode('add', 'alphamultiply')
-            -- Spectral ambient halo
-            love.graphics.setColor(0.25, 0.65, 0.95, 0.35 + 0.10 * math.sin(t * 3.0 + g.seed))
-            love.graphics.circle('fill', 0, 0, 38 * scale, 28)
-            love.graphics.setColor(0.40, 0.85, 1.0, 0.22 + 0.06 * math.cos(t * 2.5 + g.seed))
-            love.graphics.circle('fill', 0, 0, 24 * scale, 24)
-
-            -- Ghostly card silhouette
-            if q and atlas and atlas.image then
-                love.graphics.setColor(0.40, 0.75, 0.98, 0.50)
-                love.graphics.draw(atlas.image, q, -35 * scale, -48 * scale, 0, scale, scale)
+            if g.is_boss then
+                love.graphics.setColor(0.95, 0.16, 0.20, 0.38 + 0.10 * math.sin(t * 3.0 + g.seed))
+                love.graphics.circle('fill', 0, 0, 30 * scale, 24)
             else
-                love.graphics.setColor(0.35, 0.70, 0.95, 0.45)
-                love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
+                love.graphics.setColor(0.18, 0.52, 0.88, 0.28 + 0.08 * math.sin(t * 3.0 + g.seed))
+                love.graphics.circle('fill', 0, 0, 24 * scale, 24)
             end
-
-            -- Glowing spectral eyes piercing through the shadows
-            love.graphics.setColor(0.95, 1.0, 1.0, 0.95)
-            love.graphics.circle('fill', -9 * scale, -10 * scale, 3.5, 16)
-            love.graphics.circle('fill', 9 * scale, -10 * scale, 3.5, 16)
-            love.graphics.setColor(0.35, 0.90, 1.0, 0.75)
-            love.graphics.circle('fill', -9 * scale, -10 * scale, 5.5, 16)
-            love.graphics.circle('fill', 9 * scale, -10 * scale, 5.5, 16)
         end
 
         love.graphics.pop()
@@ -752,7 +813,7 @@ local function render_apagon_overlay()
     local sw, sh = love.graphics.getDimensions()
     local mx, my = love.mouse.getPosition()
     local t = cur_t
-    local lantern_radius = 265 + math.sin(t * 4.0) * 10
+    local lantern_radius = 220 + math.sin(t * 4.0) * 8
 
     love.graphics.push('all')
     love.graphics.origin()
