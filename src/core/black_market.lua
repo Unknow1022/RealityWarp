@@ -791,6 +791,10 @@ local function generate_black_market_stock()
             or (center and center.name)
             or "Contraband"
 
+        if G.GAME and G.GAME.modifiers and G.GAME.modifiers.black_market_price_increase then
+            cost = math.max(1, math.ceil(cost * (1 + G.GAME.modifiers.black_market_price_increase)))
+        end
+
         G.GAME.black_market_stock[slot] = {
             slot = slot,
             key = key,
@@ -987,6 +991,10 @@ G.FUNCS.choose_bribe_joker = function(joker_key)
         or (joker_key and localize{type = 'name_text', key = joker_key, set = 'Joker'})
         or (center and center.name)
         or "Contraband Joker"
+
+    if G.GAME and G.GAME.modifiers and G.GAME.modifiers.black_market_price_increase then
+        cost = math.max(1, math.ceil(cost * (1 + G.GAME.modifiers.black_market_price_increase)))
+    end
 
     G.GAME.black_market_stock[target_slot] = {
         slot = target_slot,
@@ -1550,7 +1558,8 @@ if G and G.UIDEF and G.UIDEF.shop then
         if G.GAME and G.GAME.black_market_last_shop_round ~= (G.GAME.round or 0) then
             G.GAME.black_market_last_shop_round = (G.GAME.round or 0)
             local roll = pseudorandom('black_market_avail_' .. tostring(G.GAME.round or 0) .. '_' .. tostring((G.GAME.round_resets and G.GAME.round_resets.ante) or 1))
-            G.GAME.black_market_available = (roll < 0.5)
+            local thresh = (G.GAME.modifiers and G.GAME.modifiers.reduced_black_market_chance) and 0.25 or 0.5
+            G.GAME.black_market_available = (roll < thresh)
         end
 
         if G.GAME and G.GAME.dark_merchant_deck then

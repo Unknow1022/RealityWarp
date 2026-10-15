@@ -1596,6 +1596,25 @@ function reality_warp_is_joker_duplicate(j_card)
 end
 local is_joker_owned_by_player = reality_warp_is_joker_duplicate
 
+function reality_warp_is_joker_key_owned(key)
+    if not key then return false end
+    if player_has_showman and player_has_showman() then return false end
+    if reality_warp_player_has_showman and reality_warp_player_has_showman() then return false end
+    if G.jokers and G.jokers.cards then
+        for _, c in ipairs(G.jokers.cards) do
+            local k = (c.config and c.config.center and c.config.center.key) or c.config.center_key
+            if k == key then return true end
+        end
+    end
+    if G.shop_jokers and G.shop_jokers.cards then
+        for _, c in ipairs(G.shop_jokers.cards) do
+            local k = (c.config and c.config.center and c.config.center.key) or c.config.center_key
+            if k == key then return true end
+        end
+    end
+    return false
+end
+
 function reality_warp_sync_owned_jokers()
     if not (G and G.GAME and G.GAME.used_jokers) then return end
     if reality_warp_player_has_showman() then return end
@@ -1662,6 +1681,27 @@ function create_card(type, area, legendary, _rarity, skip_materialize, soulable,
             local ante = (G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1
             if pseudorandom('la_muchachada_spectral_' .. (key_append or 'spe') .. ante) > 0.9985 then
                 forced_key = muchachada_center_key
+            end
+        end
+    end
+
+    if not forced_key and type == 'Joker' and (area == G.shop_jokers or (key_append and string.find(key_append, 'sho'))) then
+        local has_drone = G.GAME and G.GAME.used_vouchers and (G.GAME.used_vouchers.v_reality_warp_vip_drone or G.GAME.used_vouchers.v_vip_drone or G.GAME.used_vouchers.vip_drone)
+        local has_box = G.GAME and G.GAME.used_vouchers and (G.GAME.used_vouchers.v_reality_warp_delivery_box or G.GAME.used_vouchers.v_delivery_box or G.GAME.used_vouchers.delivery_box)
+        if has_drone or has_box then
+            local card_count = (G.shop_jokers and G.shop_jokers.cards and #G.shop_jokers.cards) or 0
+            local roll = pseudorandom('fav_joker_shop_' .. (G.GAME.round or 0) .. '_' .. (key_append or 'sho') .. card_count)
+            if roll < 0.40 then
+                local fav_list = (get_most_used_jokers and get_most_used_jokers(has_drone and 3 or 1)) or {}
+                local available = {}
+                for _, fk in ipairs(fav_list) do
+                    if not reality_warp_is_joker_key_owned(fk) then
+                        table.insert(available, fk)
+                    end
+                end
+                if #available > 0 then
+                    forced_key = pseudorandom_element(available, pseudoseed('fav_joker_pick'))
+                end
             end
         end
     end
@@ -1833,9 +1873,6 @@ end
 if calculate_reroll_cost then
     local orig_calculate_reroll_cost = calculate_reroll_cost
     function calculate_reroll_cost(skip_increment)
-        if G.GAME and G.GAME.modifiers and G.GAME.modifiers.reroll_scaling and not skip_increment then
-            G.GAME.current_round.reroll_cost_increase = (G.GAME.current_round.reroll_cost_increase or 0) + (G.GAME.modifiers.reroll_scaling - 1)
-        end
         if G.GAME and G.GAME.dark_alchemy_tag_active and not skip_increment then
             G.GAME.current_round.reroll_cost_increase = (G.GAME.current_round.reroll_cost_increase or 0) + 1
         end
@@ -6058,20 +6095,7 @@ G.reset_all_nursery_cooldowns = reset_all_nursery_cooldowns
 
 function is_nursery_fam_discovered(fam)
     if not fam then return false end
-    local fam_key = (type(fam) == 'table' and fam.key) or tostring(fam)
-    fam_key = fam_key:gsub('^c_reality_warp_', ''):gsub('^c_', '')
-    local c_key = 'c_reality_warp_' .. fam_key
-    if G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile] then
-        local p = G.PROFILES[G.SETTINGS.profile]
-        if p.all_unlocked then return true end
-        if p.witch_discovered_familiars and p.witch_discovered_familiars[c_key] ~= nil then
-            return p.witch_discovered_familiars[c_key]
-        end
-        if p.discovered and p.discovered[c_key] then return true end
-    end
-    local center = G.P_CENTERS and G.P_CENTERS[c_key]
-    if center and center.discovered and center.unlocked ~= false then return true end
-    return false
+    return true
 end
 G.is_nursery_fam_discovered = is_nursery_fam_discovered
 
@@ -6375,6 +6399,7 @@ if not G.reality_warp_fam_ui_hooked and generate_card_ui then
 
         if is_reality_warp_shop_joker(_c) and ret and ret.main then
             if card_type == 'Locked' or card_type == 'Undiscovered' or hide_desc then
+                local desc_scale = (G.LANG and G.LANG.font and G.LANG.font.DESCSCALE) or 2.8
                 ret.main = {
                     {
                         {
@@ -6382,7 +6407,7 @@ if not G.reality_warp_fam_ui_hooked and generate_card_ui then
                             config = {
                                 text = "Buy this card from the shop to view in Collection",
                                 colour = G.C.GOLD,
-                                scale = 0.32,
+                                scale = 0.32 * desc_scale,
                                 shadow = true
                             }
                         }
@@ -6399,18 +6424,19 @@ if not G.reality_warp_fam_ui_hooked and generate_card_ui then
             if unl and #unl > 0 then
                 local unl_nodes = {}
                 for _, line in ipairs(unl) do
-                    local parsed_l = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, colour = G.C.GREY } }
+                    local parsed_l = (loc_parse_string and loc_parse_string(line)) or { { strings = { line }, colour = G.C.UI.TEXT_DARK or G.C.GREY } }
                     if SMODS and SMODS.localize_box then
-                        unl_nodes[#unl_nodes + 1] = SMODS.localize_box(parsed_l, { default_col = G.C.GREY, scale = 0.32 })
+                        unl_nodes[#unl_nodes + 1] = SMODS.localize_box(parsed_l, { default_col = G.C.UI.TEXT_DARK or G.C.GREY, scale = 1.0 })
                     else
+                        local desc_scale = (G.LANG and G.LANG.font and G.LANG.font.DESCSCALE) or 2.8
                         unl_nodes[#unl_nodes + 1] = {
                             {
                                 n = G.UIT.T,
                                 config = {
                                     text = line,
-                                    colour = G.C.GREY,
-                                    scale = 0.32,
-                                    shadow = true
+                                    colour = G.C.UI.TEXT_DARK or G.C.GREY,
+                                    scale = 0.32 * desc_scale,
+                                    shadow = false
                                 }
                             }
                         }
@@ -6543,16 +6569,20 @@ G.UIDEF.nursery_tab = function(args)
             local disc = is_nursery_fam_discovered(f)
             local f_data = get_nursery_data(f.key)
 
-            local icon_view = Moveable(0, 0, 0.75, 0.75)
+            local icon_view = Moveable(0, 0, 0.70, 0.70)
+            icon_view.cards = {}
+            icon_view.states.hover.can = false
+            icon_view.states.click.can = false
+            icon_view.states.collide.can = false
+            icon_view.states.drag.can = false
             if disc and fam_atlas then
-                icon_view.icon_sprite = Sprite(0, 0, 0.75, 0.75, fam_atlas, f.pos)
+                icon_view.icon_sprite = Sprite(0, 0, 0.70, 0.70, fam_atlas, f.pos)
                 function icon_view:draw()
                     if self.icon_sprite then
                         self.icon_sprite.T.x = self.T.x
                         self.icon_sprite.T.y = self.T.y
                         self.icon_sprite:draw()
                     end
-                    add_to_drawhash(self)
                 end
             end
 
@@ -6560,42 +6590,45 @@ G.UIDEF.nursery_tab = function(args)
                 n = G.UIT.C,
                 config = {
                     align = "cm",
-                    padding = 0.04,
+                    padding = 0.03,
                     r = 0.10,
                     colour = G.C.BLACK,
-                    emboss = 0.05,
+                    emboss = 0.04,
                     outline = 1.2,
                     outline_colour = disc and G.C.GOLD or G.C.L_BLACK,
-                    minw = 1.28,
-                    minh = 2.10
+                    minw = 1.12,
+                    minh = 1.82,
+                    button = disc and 'nursery_pick_familiar' or nil,
+                    id = f.key,
+                    hover = disc
                 },
                 nodes = {
                     {
                         n = G.UIT.R,
-                        config = { align = "cm", minh = 0.8 },
+                        config = { align = "cm", minh = 0.72 },
                         nodes = {
-                            disc and { n = G.UIT.O, config = { object = icon_view } } or { n = G.UIT.T, config = { text = "LOCKED", scale = 0.20, colour = G.C.UI.TEXT_INACTIVE } }
+                            disc and { n = G.UIT.O, config = { object = icon_view } } or { n = G.UIT.T, config = { text = "LOCKED", scale = 0.18, colour = G.C.UI.TEXT_INACTIVE } }
                         }
                     },
                     {
                         n = G.UIT.R,
                         config = { align = "cm" },
                         nodes = {
-                            { n = G.UIT.T, config = { text = f.name, scale = 0.20, colour = disc and G.C.WHITE or G.C.UI.TEXT_INACTIVE, shadow = disc } }
+                            { n = G.UIT.T, config = { text = f.name, scale = 0.18, colour = disc and G.C.WHITE or G.C.UI.TEXT_INACTIVE, shadow = disc } }
                         }
                     },
                     {
                         n = G.UIT.R,
                         config = { align = "cm" },
                         nodes = {
-                            { n = G.UIT.T, config = { text = (disc and ("Lv. " .. f_data.level) or "Defeat Boss"), scale = 0.18, colour = disc and G.C.GOLD or G.C.GREY } }
+                            { n = G.UIT.T, config = { text = (disc and ("Lv. " .. f_data.level) or "Defeat Boss"), scale = 0.16, colour = disc and G.C.GOLD or G.C.GREY } }
                         }
                     },
                     {
                         n = G.UIT.R,
                         config = { align = "cm", padding = 0.02 },
                         nodes = {
-                            disc and UIBox_button({ id = f.key, label = {"Choose"}, button = 'nursery_pick_familiar', colour = G.C.GREEN, minw = 1.15, minh = 0.38, scale = 0.23, emboss = 0.06, col = true })
+                            disc and UIBox_button({ id = f.key, label = {"Choose"}, button = 'nursery_pick_familiar', colour = G.C.GREEN, minw = 1.05, minh = 0.32, scale = 0.20, emboss = 0.05, col = true })
                             or { n = G.UIT.T, config = { text = "Undiscovered", scale = 0.14, colour = G.C.UI.TEXT_INACTIVE } }
                         }
                     }
@@ -6611,54 +6644,54 @@ G.UIDEF.nursery_tab = function(args)
 
         return {
             n = G.UIT.ROOT,
-            config = { align = "cm", padding = 0.1, colour = G.C.CLEAR, minh = 8.8, minw = 10.2 },
+            config = { align = "cm", padding = 0.06, colour = G.C.CLEAR, minh = 6.2, minw = 8.6 },
             nodes = {
                 {
                     n = G.UIT.R,
-                    config = { align = "cm", padding = 0.12, r = 0.12, colour = G.C.L_BLACK, minw = 10.0, minh = 8.5, emboss = 0.08, outline = 2, outline_colour = G.C.BLACK },
+                    config = { align = "cm", padding = 0.08, r = 0.12, colour = G.C.L_BLACK, minw = 8.5, minh = 6.0, emboss = 0.08, outline = 2, outline_colour = G.C.BLACK },
                     nodes = {
                         {
                             n = G.UIT.R,
-                            config = { align = "cm", padding = 0.04 },
+                            config = { align = "cm", padding = 0.03 },
                             nodes = {
-                                { n = G.UIT.T, config = { text = "COMPANION SELECTION", scale = 0.42, colour = G.C.GOLD, shadow = true } }
+                                { n = G.UIT.T, config = { text = "COMPANION SELECTION", scale = 0.38, colour = G.C.GOLD, shadow = true } }
                             }
                         },
                         {
                             n = G.UIT.R,
                             config = { align = "cm", padding = 0.02 },
                             nodes = {
-                                { n = G.UIT.T, config = { text = "Select a familiar resident for " .. current_room.room_name, scale = 0.24, colour = G.C.UI.TEXT_LIGHT } }
+                                { n = G.UIT.T, config = { text = "Select a familiar resident for " .. current_room.room_name, scale = 0.22, colour = G.C.UI.TEXT_LIGHT } }
+                            }
+                        },
+                        {
+                            n = G.UIT.R,
+                            config = { align = "cm", padding = 0.03 },
+                            nodes = {
+                                UIBox_button({ label = {" < Prev "}, button = 'nursery_picker_prev_page', colour = G.C.BLUE, minw = 1.4, minh = 0.38, scale = 0.24, emboss = 0.06, col = true }),
+                                {
+                                    n = G.UIT.C,
+                                    config = { align = "cm", minw = 2.4 },
+                                    nodes = {
+                                        { n = G.UIT.T, config = { text = "Page " .. page .. " / 2", scale = 0.24, colour = G.C.WHITE, shadow = true } }
+                                    }
+                                },
+                                UIBox_button({ label = {" Next > "}, button = 'nursery_picker_next_page', colour = G.C.BLUE, minw = 1.4, minh = 0.38, scale = 0.24, emboss = 0.06, col = true }),
+                            }
+                        },
+                        {
+                            n = G.UIT.R,
+                            config = { align = "cm", padding = 0.04, r = 0.08, colour = G.C.BLACK, emboss = 0.04, minw = 8.2, minh = 4.1 },
+                            nodes = {
+                                { n = G.UIT.R, config = { align = "cm", padding = 0.02 }, nodes = row1_nodes },
+                                { n = G.UIT.R, config = { align = "cm", padding = 0.02 }, nodes = row2_nodes }
                             }
                         },
                         {
                             n = G.UIT.R,
                             config = { align = "cm", padding = 0.04 },
                             nodes = {
-                                UIBox_button({ label = {" < Prev Page "}, button = 'nursery_picker_prev_page', colour = G.C.BLUE, minw = 1.8, minh = 0.45, scale = 0.28, emboss = 0.08, col = true }),
-                                {
-                                    n = G.UIT.C,
-                                    config = { align = "cm", minw = 3.0 },
-                                    nodes = {
-                                        { n = G.UIT.T, config = { text = "Page " .. page .. " of 2", scale = 0.28, colour = G.C.WHITE, shadow = true } }
-                                    }
-                                },
-                                UIBox_button({ label = {" Next Page > "}, button = 'nursery_picker_next_page', colour = G.C.BLUE, minw = 1.8, minh = 0.45, scale = 0.28, emboss = 0.08, col = true }),
-                            }
-                        },
-                        {
-                            n = G.UIT.R,
-                            config = { align = "cm", padding = 0.06, r = 0.1, colour = G.C.BLACK, emboss = 0.05, minw = 9.6, minh = 5.2 },
-                            nodes = {
-                                { n = G.UIT.R, config = { align = "cm", padding = 0.03 }, nodes = row1_nodes },
-                                { n = G.UIT.R, config = { align = "cm", padding = 0.03 }, nodes = row2_nodes }
-                            }
-                        },
-                        {
-                            n = G.UIT.R,
-                            config = { align = "cm", padding = 0.06 },
-                            nodes = {
-                                UIBox_button({ label = {"Back to Room"}, button = 'nursery_close_picker', colour = G.C.RED, minw = 2.4, minh = 0.55, scale = 0.33, emboss = 0.08, col = true })
+                                UIBox_button({ label = {"Back to Room"}, button = 'nursery_close_picker', colour = G.C.RED, minw = 2.0, minh = 0.44, scale = 0.28, emboss = 0.06, col = true })
                             }
                         }
                     }
@@ -6673,49 +6706,49 @@ G.UIDEF.nursery_tab = function(args)
     local title_text = sel_fam and (sel_fam.name .. "  [Lv. " .. data.level .. "/5]" .. lead_badge .. " in " .. current_room.room_name) or ("Empty Room - " .. current_room.room_name)
     local nav_row = {
         n = G.UIT.R,
-        config = { align = "cm", padding = 0.04, minw = 9.4 },
+        config = { align = "cm", padding = 0.02, minw = 8.2 },
         nodes = {
-            UIBox_button({ id = 'nursery_prev_btn', label = {" < "}, button = 'nursery_prev_room', colour = G.C.ORANGE, minw = 0.85, minh = 0.55, scale = 0.4, emboss = 0.08, col = true }),
+            UIBox_button({ id = 'nursery_prev_btn', label = {" < "}, button = 'nursery_prev_room', colour = G.C.ORANGE, minw = 0.7, minh = 0.45, scale = 0.32, emboss = 0.06, col = true }),
             {
                 n = G.UIT.C,
-                config = { align = "cm", minw = 7.0, padding = 0.04 },
+                config = { align = "cm", minw = 6.4, padding = 0.02 },
                 nodes = {
                     {
                         n = G.UIT.R,
                         config = { align = "cm" },
                         nodes = {
-                            { n = G.UIT.T, config = { text = title_text, scale = 0.35, colour = (sel_fam and (is_lead and G.C.GOLD or G.C.WHITE) or G.C.GOLD), shadow = true } }
+                            { n = G.UIT.T, config = { text = title_text, scale = 0.30, colour = (sel_fam and (is_lead and G.C.GOLD or G.C.WHITE) or G.C.GOLD), shadow = true } }
                         }
                     },
                     {
                         n = G.UIT.R,
                         config = { align = "cm" },
                         nodes = {
-                            { n = G.UIT.T, config = { text = ("Room " .. current_idx .. " of " .. #G.NURSERY_ROOMS .. " (Themed for " .. current_room.boss_name .. ")"), scale = 0.22, colour = G.C.UI.TEXT_LIGHT } }
+                            { n = G.UIT.T, config = { text = ("Room " .. current_idx .. " of " .. #G.NURSERY_ROOMS .. " (Themed for " .. current_room.boss_name .. ")"), scale = 0.19, colour = G.C.UI.TEXT_LIGHT } }
                         }
                     }
                 }
             },
-            UIBox_button({ id = 'nursery_next_btn', label = {" > "}, button = 'nursery_next_room', colour = G.C.ORANGE, minw = 0.85, minh = 0.55, scale = 0.4, emboss = 0.08, col = true }),
+            UIBox_button({ id = 'nursery_next_btn', label = {" > "}, button = 'nursery_next_room', colour = G.C.ORANGE, minw = 0.7, minh = 0.45, scale = 0.32, emboss = 0.06, col = true }),
         }
     }
 
     local manage_row = sel_fam and {
         n = G.UIT.R,
-        config = { align = "cm", padding = 0.03 },
+        config = { align = "cm", padding = 0.02 },
         nodes = {
-            { n = G.UIT.T, config = { text = "Resident: " .. sel_fam.name .. "  ", scale = 0.28, colour = G.C.GOLD, shadow = true } },
-            UIBox_button({ label = {"Switch"}, button = 'nursery_open_picker', colour = G.C.BLUE, minw = 1.4, minh = 0.45, scale = 0.26, emboss = 0.08, col = true }),
-            is_lead and UIBox_button({ id = 'nursery_lead_active_btn', label = {"Lead Companion"}, button = 'nursery_toggle_lead', colour = G.C.GOLD, minw = 2.0, minh = 0.45, scale = 0.26, emboss = 0.08, col = true })
-            or UIBox_button({ id = 'nursery_take_run_btn', label = {"Take on Run"}, button = 'nursery_set_as_lead', colour = G.C.GREEN, minw = 1.9, minh = 0.45, scale = 0.26, emboss = 0.08, col = true }),
-            UIBox_button({ label = {"Empty"}, button = 'nursery_remove_familiar', colour = G.C.RED, minw = 1.3, minh = 0.45, scale = 0.26, emboss = 0.08, col = true }),
+            { n = G.UIT.T, config = { text = "Resident: " .. sel_fam.name .. "  ", scale = 0.24, colour = G.C.GOLD, shadow = true } },
+            UIBox_button({ label = {"Switch"}, button = 'nursery_open_picker', colour = G.C.BLUE, minw = 1.2, minh = 0.38, scale = 0.22, emboss = 0.06, col = true }),
+            is_lead and UIBox_button({ id = 'nursery_lead_active_btn', label = {"Lead Companion"}, button = 'nursery_toggle_lead', colour = G.C.GOLD, minw = 1.7, minh = 0.38, scale = 0.22, emboss = 0.06, col = true })
+            or UIBox_button({ id = 'nursery_take_run_btn', label = {"Take on Run"}, button = 'nursery_set_as_lead', colour = G.C.GREEN, minw = 1.6, minh = 0.38, scale = 0.22, emboss = 0.06, col = true }),
+            UIBox_button({ label = {"Empty"}, button = 'nursery_remove_familiar', colour = G.C.RED, minw = 1.1, minh = 0.38, scale = 0.22, emboss = 0.06, col = true }),
         }
     } or {
         n = G.UIT.R,
-        config = { align = "cm", padding = 0.03 },
+        config = { align = "cm", padding = 0.02 },
         nodes = {
-            { n = G.UIT.T, config = { text = "No familiar living in this room yet!  ", scale = 0.28, colour = G.C.UI.TEXT_LIGHT } },
-            UIBox_button({ label = {"+ Assign Resident"}, button = 'nursery_open_picker', colour = G.C.GREEN, minw = 2.4, minh = 0.48, scale = 0.30, emboss = 0.08, col = true }),
+            { n = G.UIT.T, config = { text = "No familiar living in this room yet!  ", scale = 0.24, colour = G.C.UI.TEXT_LIGHT } },
+            UIBox_button({ label = {"+ Assign Resident"}, button = 'nursery_open_picker', colour = G.C.GREEN, minw = 2.0, minh = 0.40, scale = 0.25, emboss = 0.06, col = true }),
         }
     }
 
@@ -6723,14 +6756,22 @@ G.UIDEF.nursery_tab = function(args)
     local fam_atlas = G.ASSET_ATLAS['reality_warp_familiars'] or G.ASSET_ATLAS['reality_warp_reality_warp_familiars']
     local room_pos = { x = current_idx - 1, y = 0 }
 
-    local room_view = Moveable(0, 0, 6.4, 3.65)
+    local room_view = Moveable(0, 0, 5.4, 2.7)
+    room_view.cards = {}
+    room_view.children = room_view.children or {}
+    room_view.states.hover.can = false
+    room_view.states.click.can = false
+    room_view.states.collide.can = false
+    room_view.states.drag.can = false
     if room_atlas then
-        room_view.room_sprite = Sprite(0, 0, 6.4, 3.65, room_atlas, room_pos)
+        room_view.room_sprite = Sprite(0, 0, 5.4, 2.7, room_atlas, room_pos)
     end
 
     if sel_fam and fam_atlas then
-        local fam_view = Moveable(0, 0, 1.6, 1.6)
-        fam_view.fam_sprite = Sprite(0, 0, 1.6, 1.6, fam_atlas, sel_fam.pos)
+        local fam_view = Moveable(0, 0, 1.3, 1.3)
+        fam_view.cards = {}
+        fam_view.children = fam_view.children or {}
+        fam_view.fam_sprite = Sprite(0, 0, 1.3, 1.3, fam_atlas, sel_fam.pos)
         fam_view.parent_room = room_view
         fam_view.states.click.can = true
         fam_view.states.hover.can = true
@@ -6787,10 +6828,10 @@ G.UIDEF.nursery_tab = function(args)
                 self.T.x = cx - ox
                 self.T.y = cy - oy
                 if self.parent_room then
-                    local min_x = self.parent_room.T.x + 0.15
-                    local max_x = self.parent_room.T.x + self.parent_room.T.w - self.T.w - 0.15
-                    local min_y = self.parent_room.T.y + 0.15
-                    local max_y = self.parent_room.T.y + self.parent_room.T.h - self.T.h - 0.15
+                    local min_x = self.parent_room.T.x + 0.1
+                    local max_x = self.parent_room.T.x + self.parent_room.T.w - self.T.w - 0.1
+                    local min_y = self.parent_room.T.y + 0.1
+                    local max_y = self.parent_room.T.y + self.parent_room.T.h - self.T.h - 0.1
                     self.T.x = math.min(max_x, math.max(min_x, self.T.x))
                     self.T.y = math.min(max_y, math.max(min_y, self.T.y))
                 end
@@ -6836,6 +6877,7 @@ G.UIDEF.nursery_tab = function(args)
         end
 
         room_view.fam_view = fam_view
+        room_view.children.fam_view = fam_view
     end
 
     function room_view:draw()
@@ -6845,12 +6887,18 @@ G.UIDEF.nursery_tab = function(args)
             self.room_sprite:draw()
         end
         if self.fam_view then
-            if not self.fam_view_placed then
-                self.fam_view.T.x = self.T.x + (self.T.w - self.fam_view.T.w) * 0.5
-                self.fam_view.T.y = self.T.y + self.T.h * 0.38
+            if not self.fam_view.states.drag.is then
+                if not self.fam_offset_x then
+                    self.fam_offset_x = (self.T.w - self.fam_view.T.w) * 0.5
+                    self.fam_offset_y = self.T.h * 0.35
+                end
+                self.fam_view.T.x = self.T.x + self.fam_offset_x
+                self.fam_view.T.y = self.T.y + self.fam_offset_y
                 self.fam_view.VT.x = self.fam_view.T.x
                 self.fam_view.VT.y = self.fam_view.T.y
-                self.fam_view_placed = true
+            else
+                self.fam_offset_x = self.fam_view.T.x - self.T.x
+                self.fam_offset_y = self.fam_view.T.y - self.T.y
             end
             self.fam_view:draw()
         end
@@ -6859,32 +6907,38 @@ G.UIDEF.nursery_tab = function(args)
 
     function room_view:remove()
         if self.room_sprite then self.room_sprite:remove() end
-        if self.fam_view then self.fam_view:remove() end
+        if self.fam_view then
+            self.fam_view:remove()
+            self.fam_view = nil
+        end
+        if self.children and self.children.fam_view then
+            self.children.fam_view = nil
+        end
         Moveable.remove(self)
     end
 
-    local bar_w = 5.2
+    local bar_w = 4.6
     local fill_ratio = data.level >= 5 and 1.0 or math.min(1.0, math.max(0.04, data.exp / data.max_exp))
     local fill_w = bar_w * fill_ratio
 
     local exp_node = sel_fam and {
         n = G.UIT.R,
-        config = { align = "cm", padding = 0.03 },
+        config = { align = "cm", padding = 0.02 },
         nodes = {
             {
                 n = G.UIT.R,
                 config = { align = "cm" },
                 nodes = {
-                    { n = G.UIT.T, config = { id = 'nursery_exp_text', text = (data.level >= 5 and "Lv. 5 [MAX LEVEL] - Maximum Power!" or ("Familiar Level: Lv. " .. data.level .. "  ( " .. data.exp .. " / " .. data.max_exp .. " EXP )")), scale = 0.28, colour = G.C.GOLD, shadow = true } }
+                    { n = G.UIT.T, config = { id = 'nursery_exp_text', text = (data.level >= 5 and "Lv. 5 [MAX LEVEL] - Maximum Power!" or ("Familiar Level: Lv. " .. data.level .. "  ( " .. data.exp .. " / " .. data.max_exp .. " EXP )")), scale = 0.24, colour = G.C.GOLD, shadow = true } }
                 }
             },
             {
                 n = G.UIT.R,
-                config = { align = "cl", minw = bar_w, minh = 0.18, colour = G.C.BLACK, r = 0.08, emboss = 0.06, padding = 0.02, outline = 1, outline_colour = G.C.L_BLACK },
+                config = { align = "cl", minw = bar_w, minh = 0.15, colour = G.C.BLACK, r = 0.06, emboss = 0.04, padding = 0.01, outline = 1, outline_colour = G.C.L_BLACK },
                 nodes = {
                     {
                         n = G.UIT.C,
-                        config = { id = 'nursery_exp_fill', align = "cm", minw = fill_w, minh = 0.14, colour = (data.level >= 5 and G.C.GOLD or G.C.BLUE), r = 0.06, emboss = 0.04 },
+                        config = { id = 'nursery_exp_fill', align = "cm", minw = fill_w, minh = 0.13, colour = (data.level >= 5 and G.C.GOLD or G.C.BLUE), r = 0.05, emboss = 0.03 },
                         nodes = {}
                     }
                 }
@@ -6895,20 +6949,20 @@ G.UIDEF.nursery_tab = function(args)
     if not G.nursery_dialogue and sel_fam then
         G.nursery_dialogue = get_nursery_dynamic_dialogue(sel_fam, 'present', current_room)
     end
-    local current_quote = sel_fam and G.nursery_dialogue or "This room is empty. Tap '+ Add Familiar' to choose a companion!"
+    local current_quote = sel_fam and G.nursery_dialogue or "This room is empty. Tap '+ Assign Resident' to choose a companion!"
     local quote_node = {
         n = G.UIT.R,
-        config = { align = "cm", padding = 0.04 },
+        config = { align = "cm", padding = 0.02 },
         nodes = {
             {
                 n = G.UIT.R,
                 config = {
                     align = "cm",
                     colour = G.C.JOKER_GREY,
-                    r = 0.25,
-                    padding = 0.05,
-                    minw = 5.4,
-                    maxw = 7.6,
+                    r = 0.20,
+                    padding = 0.04,
+                    minw = 4.6,
+                    maxw = 7.0,
                     shadow = true
                 },
                 nodes = {
@@ -6917,14 +6971,14 @@ G.UIDEF.nursery_tab = function(args)
                         config = {
                             align = "cm",
                             colour = G.C.WHITE,
-                            r = 0.18,
-                            padding = 0.08,
-                            minw = 5.2,
-                            maxw = 7.4,
-                            emboss = 0.04
+                            r = 0.15,
+                            padding = 0.05,
+                            minw = 4.4,
+                            maxw = 6.8,
+                            emboss = 0.03
                         },
                         nodes = {
-                            { n = G.UIT.T, config = { id = 'nursery_quote_text', text = current_quote, scale = 0.28, colour = G.C.UI.TEXT_DARK, shadow = false } }
+                            { n = G.UIT.T, config = { id = 'nursery_quote_text', text = current_quote, scale = 0.24, colour = G.C.UI.TEXT_DARK, shadow = false } }
                         }
                     }
                 }
@@ -6936,13 +6990,13 @@ G.UIDEF.nursery_tab = function(args)
     if sel_fam then
         room_inner = {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.04 },
+            config = { align = "cm", padding = 0.02 },
             nodes = {
                 quote_node,
                 exp_node,
                 {
                     n = G.UIT.R,
-                    config = { align = "cm", padding = 0.04 },
+                    config = { align = "cm", padding = 0.02 },
                     nodes = {
                         { n = G.UIT.O, config = { object = room_view } }
                     }
@@ -6952,21 +7006,21 @@ G.UIDEF.nursery_tab = function(args)
     else
         room_inner = {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.05 },
+            config = { align = "cm", padding = 0.03 },
             nodes = {
                 quote_node,
                 {
                     n = G.UIT.R,
-                    config = { align = "cm", padding = 0.04 },
+                    config = { align = "cm", padding = 0.02 },
                     nodes = {
                         { n = G.UIT.O, config = { object = room_view } }
                     }
                 },
                 {
                     n = G.UIT.R,
-                    config = { align = "cm", padding = 0.04 },
+                    config = { align = "cm", padding = 0.02 },
                     nodes = {
-                        UIBox_button({ label = {"+ Choose a Familiar to Move In"}, button = 'nursery_open_picker', colour = G.C.GREEN, minw = 4.2, minh = 0.65, scale = 0.36, emboss = 0.08, col = true })
+                        UIBox_button({ label = {"+ Choose a Familiar to Move In"}, button = 'nursery_open_picker', colour = G.C.GREEN, minw = 3.6, minh = 0.50, scale = 0.28, emboss = 0.06, col = true })
                     }
                 }
             }
@@ -6989,38 +7043,38 @@ G.UIDEF.nursery_tab = function(args)
 
         actions_row = {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.08 },
+            config = { align = "cm", padding = 0.04 },
             nodes = {
-                UIBox_button({ id = 'nursery_btn_play', label = {play_label}, button = 'nursery_action_play', colour = play_col, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
-                UIBox_button({ id = 'nursery_btn_feed', label = {feed_label}, button = 'nursery_action_feed', colour = feed_col, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
-                UIBox_button({ id = 'nursery_btn_sleep', label = {sleep_label}, button = 'nursery_action_sleep', colour = sleep_col, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
+                UIBox_button({ id = 'nursery_btn_play', label = {play_label}, button = 'nursery_action_play', colour = play_col, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
+                UIBox_button({ id = 'nursery_btn_feed', label = {feed_label}, button = 'nursery_action_feed', colour = feed_col, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
+                UIBox_button({ id = 'nursery_btn_sleep', label = {sleep_label}, button = 'nursery_action_sleep', colour = sleep_col, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
             }
         }
     else
         actions_row = {
             n = G.UIT.R,
-            config = { align = "cm", padding = 0.08 },
+            config = { align = "cm", padding = 0.04 },
             nodes = {
-                UIBox_button({ label = {"Play (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
-                UIBox_button({ label = {"Feed (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
-                UIBox_button({ label = {"Sleep (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.4, minh = 0.62, scale = 0.33, emboss = 0.08, col = true }),
+                UIBox_button({ label = {"Play (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
+                UIBox_button({ label = {"Feed (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
+                UIBox_button({ label = {"Sleep (Inactive)"}, button = 'nursery_action_disabled', colour = G.C.UI.BACKGROUND_INACTIVE, minw = 2.1, minh = 0.48, scale = 0.27, emboss = 0.06, col = true }),
             }
         }
     end
 
     return {
         n = G.UIT.ROOT,
-        config = { align = "cm", padding = 0.1, colour = G.C.CLEAR, minh = 8.8, minw = 10.2 },
+        config = { align = "cm", padding = 0.06, colour = G.C.CLEAR, minh = 6.2, minw = 8.6 },
         nodes = {
             {
                 n = G.UIT.R,
-                config = { align = "cm", padding = 0.12, r = 0.12, colour = G.C.L_BLACK, minw = 10.0, minh = 8.5, emboss = 0.08, outline = 2, outline_colour = G.C.BLACK },
+                config = { align = "cm", padding = 0.08, r = 0.12, colour = G.C.L_BLACK, minw = 8.5, minh = 6.0, emboss = 0.08, outline = 2, outline_colour = G.C.BLACK },
                 nodes = {
                     nav_row,
                     manage_row,
                     {
                         n = G.UIT.R,
-                        config = { align = "cm", padding = 0.12, r = 0.12, colour = bg_colour, minw = 9.6, minh = 5.4, emboss = 0.05, outline = 2, outline_colour = G.C.BLACK },
+                        config = { align = "cm", padding = 0.06, r = 0.10, colour = bg_colour, minw = 8.2, minh = 4.2, emboss = 0.04, outline = 2, outline_colour = G.C.BLACK },
                         nodes = {
                             room_inner
                         }
@@ -7030,6 +7084,36 @@ G.UIDEF.nursery_tab = function(args)
             }
         }
     }
+end
+
+-- ----------------------------------------------------------------------------
+-- Safe Guards: CardArea Draw / Remove nil-cards Crash Prevention
+-- ----------------------------------------------------------------------------
+if CardArea then
+    if CardArea.draw and not CardArea.reality_warp_guarded_draw then
+        local orig_cardarea_draw = CardArea.draw
+        CardArea.draw = function(self, ...)
+            if not self or not self.cards then return end
+            return orig_cardarea_draw(self, ...)
+        end
+        CardArea.reality_warp_guarded_draw = true
+    end
+    if CardArea.remove and not CardArea.reality_warp_guarded_remove then
+        local orig_cardarea_remove = CardArea.remove
+        CardArea.remove = function(self, ...)
+            orig_cardarea_remove(self, ...)
+            self.cards = self.cards or {}
+        end
+        CardArea.reality_warp_guarded_remove = true
+    end
+    if CardArea.remove_card and not CardArea.reality_warp_guarded_remove_card then
+        local orig_cardarea_remove_card = CardArea.remove_card
+        CardArea.remove_card = function(self, ...)
+            if not self or not self.cards then return end
+            return orig_cardarea_remove_card(self, ...)
+        end
+        CardArea.reality_warp_guarded_remove_card = true
+    end
 end
 
 G.FUNCS = G.FUNCS or {}
@@ -7053,11 +7137,13 @@ function G.FUNCS.nursery_refresh_page(e)
         tab_contents.config.object:remove()
         tab_contents.config.object = UIBox{
             definition = G.UIDEF.nursery_tab('Nursery'),
-            config = { offset = {x=0,y=0}, parent = tab_contents, type = 'cm' }
+            config = { offset = {x=0,y=0}, parent = tab_contents, align = 'cm', type = 'cm' }
         }
         if tab_contents.UIBox then
             tab_contents.UIBox:recalculate()
         end
+    elseif G.FUNCS.reality_warp_open_nursery_modal then
+        G.FUNCS.reality_warp_open_nursery_modal(e)
     end
 end
 
@@ -7122,7 +7208,7 @@ G.FUNCS.nursery_picker_next_page = function(e)
 end
 
 G.FUNCS.nursery_pick_familiar = function(e)
-    local fam_key = e and e.config and e.config.id
+    local fam_key = e and (e.config and (e.config.id or e.config.fam_key)) or (e and e.parent and e.parent.config and e.parent.config.id)
     if fam_key then
         local current_idx = G.nursery_room_index or 1
         set_nursery_room_resident(current_idx, fam_key)
@@ -7329,45 +7415,44 @@ if create_tabs then
         if setup_reality_warp_shop_unlocks then
             pcall(setup_reality_warp_shop_unlocks)
         end
+        if reality_warp_purge_trials_from_challenges then
+            pcall(reality_warp_purge_trials_from_challenges)
+        end
         if args and args.tabs then
-            local is_run_setup = false
-            for _, tab in ipairs(args.tabs) do
-                if tab and (tab.tab_definition_function_args == 'New Run' or (G.UIDEF and tab.tab_definition_function == G.UIDEF.challenges)) then
-                    is_run_setup = true
-                    break
-                end
-            end
-            if is_run_setup then
-                if reality_warp_purge_trials_from_challenges then
-                    reality_warp_purge_trials_from_challenges()
-                end
-                local exists = false
-                for _, tab in ipairs(args.tabs) do
-                    if tab and tab.label == "Nursery" then exists = true; break end
-                end
-                if not exists then
-                    table.insert(args.tabs, {
-                        label = "Nursery",
-                        tab_definition_function = G.UIDEF.nursery_tab,
-                        tab_definition_function_args = 'Nursery',
-                        chosen = false
-                    })
-                end
-                local exists_trials = false
-                for _, tab in ipairs(args.tabs) do
-                    if tab and tab.label == "Joker Trials" then exists_trials = true; break end
-                end
-                if not exists_trials and G.UIDEF and G.UIDEF.outsider_trials_tab then
-                    table.insert(args.tabs, {
-                        label = "Joker Trials",
-                        tab_definition_function = G.UIDEF.outsider_trials_tab,
-                        tab_definition_function_args = 'Joker Trials',
-                        chosen = false
-                    })
+            for i = #args.tabs, 1, -1 do
+                local tab = args.tabs[i]
+                if tab then
+                    local lbl = string.lower(tab.label or '')
+                    local targs = string.lower(tostring(tab.tab_definition_function_args or ''))
+                    local is_trial = string.find(lbl, 'trial') or string.find(targs, 'trial') or (G.UIDEF and tab.tab_definition_function == G.UIDEF.outsider_trials_tab)
+                    local is_nursery = string.find(lbl, 'nursery') or string.find(targs, 'nursery') or (G.UIDEF and tab.tab_definition_function == G.UIDEF.nursery_tab)
+                    if is_trial or is_nursery then
+                        table.remove(args.tabs, i)
+                    end
                 end
             end
         end
         return orig_create_tabs(args)
+    end
+end
+
+if create_UIBox_run_setup then
+    local orig_create_UIBox_run_setup = create_UIBox_run_setup
+    function create_UIBox_run_setup(...)
+        if reality_warp_purge_trials_from_challenges then
+            pcall(reality_warp_purge_trials_from_challenges)
+        end
+        return orig_create_UIBox_run_setup(...)
+    end
+end
+
+if G.FUNCS and G.FUNCS.setup_run then
+    local orig_setup_run = G.FUNCS.setup_run
+    G.FUNCS.setup_run = function(e)
+        if reality_warp_purge_trials_from_challenges then
+            pcall(reality_warp_purge_trials_from_challenges)
+        end
+        return orig_setup_run(e or { config = {}, UIBox = {} })
     end
 end
 
@@ -8177,8 +8262,13 @@ if AnimatedSprite then
         )
         if is_witch_blind or is_witch_fam then
             if not self.states.visible then return end
-            if is_witch_fam and self.role and self.role.draw_major and (self.role.draw_major.removed or (self.role.draw_major.area and self.role.draw_major.area ~= G.botg_familiars)) then
-                return
+            if is_witch_fam and self.role and self.role.draw_major then
+                local major = self.role.draw_major
+                if major.removed then return end
+                local is_coll = (major.bypass_discovery_center or major.bypass_discovery_ui) or (major.area and (major.area.config and major.area.config.collection or (major.params and major.params.bypass_discovery_center))) or (G.OVERLAY_MENU ~= nil)
+                if not is_coll and G.STAGE == G.STAGES.RUN and (major.area and major.area ~= G.botg_familiars) then
+                    return
+                end
             end
             prep_draw(self, 1)
             local vw = (self.VT and self.VT.w and self.VT.w > 0) and self.VT.w or 1
@@ -8222,8 +8312,13 @@ if Sprite then
         )
         if is_witch_blind or is_witch_fam then
             if not self.states.visible then return end
-            if is_witch_fam and self.role and self.role.draw_major and (self.role.draw_major.removed or (self.role.draw_major.area and self.role.draw_major.area ~= G.botg_familiars)) then
-                return
+            if is_witch_fam and self.role and self.role.draw_major then
+                local major = self.role.draw_major
+                if major.removed then return end
+                local is_coll = (major.bypass_discovery_center or major.bypass_discovery_ui) or (major.area and (major.area.config and major.area.config.collection or (major.params and major.params.bypass_discovery_center))) or (G.OVERLAY_MENU ~= nil)
+                if not is_coll and G.STAGE == G.STAGES.RUN and (major.area and major.area ~= G.botg_familiars) then
+                    return
+                end
             end
             if self.sprite_pos.x ~= self.sprite_pos_copy.x or self.sprite_pos.y ~= self.sprite_pos_copy.y then
                 self:set_sprite_pos(self.sprite_pos)

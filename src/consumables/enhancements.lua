@@ -788,6 +788,10 @@ if SMODS and SMODS.Shader then
         path = 'glitch.fs'
     }
     SMODS.Shader {
+        key = 'ghost',
+        path = 'ghost.fs'
+    }
+    SMODS.Shader {
         key = 'neon_grid',
         path = 'neon_grid.fs'
     }
@@ -1197,6 +1201,21 @@ if SMODS and SMODS.Edition then
         loc_vars = function(self, info_queue)
             return { vars = {} }
         end,
+        draw = function(self, card, layer)
+            if (layer == 'card' or layer == 'both') and card.sprite_facing == 'front' and (card.config.center.discovered or card.bypass_discovery_center) then
+                local current_time = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+                local sh = G.SHADERS and (G.SHADERS['reality_warp_glitch'] or G.SHADERS['glitch'])
+                if sh then
+                    pcall(function()
+                        if sh:hasUniform('time') then sh:send('time', current_time) end
+                        if sh:hasUniform('glitch') then sh:send('glitch', { 0.5, current_time }) end
+                        if sh:hasUniform('reality_warp_glitch') then sh:send('reality_warp_glitch', { 0.5, current_time }) end
+                    end)
+                end
+                local sh_name = G.SHADERS and G.SHADERS['reality_warp_glitch'] and 'reality_warp_glitch' or 'glitch'
+                card.children.center:draw_shader(sh_name, nil, { 0.5, current_time })
+            end
+        end,
         calculate = function(self, card, context)
             if context.post_joker or (context.main_scoring and context.cardarea == G.play) then
                 local glitch_texts = {
@@ -1298,6 +1317,27 @@ if SMODS and SMODS.Edition then
             end
         end
     }
+
+    SMODS.Edition {
+        key = 'ghost',
+        shader = 'ghost',
+        badge_colour = HEX('4ea2b2'),
+        weight = 0,
+        extra_cost = 6,
+        in_shop = false,
+        sound = { sound = 'foil1', per = 1.1, vol = 0.5 },
+        loc_txt = {
+            name = 'Ghost',
+            label = 'Ghost',
+            text = {
+                "Does not occupy a {C:attention}Joker slot{},",
+                "translucent spectral form"
+            }
+        },
+        loc_vars = function(self, info_queue)
+            return { vars = {} }
+        end
+    }
 end
 
 local function sync_reality_warp_edition_loc()
@@ -1310,7 +1350,8 @@ local function sync_reality_warp_edition_loc()
             'e_reality_warp_prismatic', 'e_prismatic', 'prismatic',
             'e_reality_warp_supercharged', 'e_supercharged', 'supercharged',
             'e_reality_warp_astronomical', 'e_astronomical', 'astronomical',
-            'e_reality_warp_glitch', 'e_glitch', 'glitch'
+            'e_reality_warp_glitch', 'e_glitch', 'glitch',
+            'e_reality_warp_ghost', 'e_ghost', 'ghost'
         }) do
             local e_entry = G.localization.descriptions.Edition[k]
             if e_entry and type(e_entry) == 'table' then
@@ -1420,6 +1461,8 @@ if Card then
         e_supercharged = 'e_reality_warp_supercharged',
         astronomical = 'e_reality_warp_astronomical',
         e_astronomical = 'e_reality_warp_astronomical',
+        ghost = 'e_reality_warp_ghost',
+        e_ghost = 'e_reality_warp_ghost',
     }
 
     local orig_set_edition = Card.set_edition
@@ -1455,6 +1498,19 @@ function apply_glitch_to_joker(joker, glitch_card)
     if not joker or not glitch_card or glitch_card.destroyed or glitch_card.shattered or glitch_card.glitch_used then return end
     glitch_card.glitch_used = true
     glitch_card.destroyed = true
+
+    -- Track Glitch usage for ERROR 404 voucher unlock
+    if G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile] then
+        local p = G.PROFILES[G.SETTINGS.profile]
+        p.career_stats = p.career_stats or {}
+        p.career_stats.rw_glitches_used = (p.career_stats.rw_glitches_used or 0) + 1
+        if SMODS and SMODS.check_for_unlock then
+            SMODS.check_for_unlock({ type = 'rw_used_glitch' })
+        end
+    end
+    if G.GAME then
+        G.GAME.rw_glitches_used = (G.GAME.rw_glitches_used or 0) + 1
+    end
 
     -- Oversaturated loud sound effects
     play_sound('tarot1', 0.5, 1.0)
@@ -1728,20 +1784,116 @@ if SMODS and SMODS.Consumable then
         conditions = { vortex = false, facing = 'front' }
     }
 
+    if Sprite and Sprite.draw_shader then
+        local orig_s_draw_shader = Sprite.draw_shader
+        function Sprite:draw_shader(shader, shadow, send_to_shader, ...)
+            if shader == 'glitch' or shader == 'reality_warp_glitch' then
+                local current_time = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+                local sh = G.SHADERS and (G.SHADERS['reality_warp_glitch'] or G.SHADERS['glitch'])
+                if sh then
+                    if not G.SHADERS['glitch'] then G.SHADERS['glitch'] = sh end
+                    if not G.SHADERS['reality_warp_glitch'] then G.SHADERS['reality_warp_glitch'] = sh end
+                    pcall(function()
+                        if sh:hasUniform('time') then sh:send('time', current_time) end
+                        if sh:hasUniform('glitch') then sh:send('glitch', { 0.5, current_time }) end
+                        if sh:hasUniform('reality_warp_glitch') then sh:send('reality_warp_glitch', { 0.5, current_time }) end
+                    end)
+                end
+                send_to_shader = { 0.5, current_time }
+            elseif shader == 'ghost' or shader == 'reality_warp_ghost' then
+                local current_time = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+                local sh = G.SHADERS and (G.SHADERS['reality_warp_ghost'] or G.SHADERS['ghost'])
+                if sh then
+                    if not G.SHADERS['ghost'] then G.SHADERS['ghost'] = sh end
+                    if not G.SHADERS['reality_warp_ghost'] then G.SHADERS['reality_warp_ghost'] = sh end
+                    pcall(function()
+                        if sh:hasUniform('time') then sh:send('time', current_time) end
+                        if sh:hasUniform('ghost') then sh:send('ghost', { 0.5, current_time }) end
+                        if sh:hasUniform('reality_warp_ghost') then sh:send('reality_warp_ghost', { 0.5, current_time }) end
+                    end)
+                end
+                send_to_shader = { 0.5, current_time }
+            end
+            return orig_s_draw_shader(self, shader, shadow, send_to_shader, ...)
+        end
+    end
+
     if Game and Game.update then
         local orig_game_update_glitch = Game.update
         function Game:update(dt)
             orig_game_update_glitch(self, dt)
-            local sh = G.SHADERS and (G.SHADERS['reality_warp_glitch'] or G.SHADERS['glitch'])
-            if sh then
-                if not G.SHADERS['glitch'] then G.SHADERS['glitch'] = sh end
+            local current_time = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+            local sh_glitch = G.SHADERS and (G.SHADERS['reality_warp_glitch'] or G.SHADERS['glitch'])
+            if sh_glitch then
+                if not G.SHADERS['glitch'] then G.SHADERS['glitch'] = sh_glitch end
+                if not G.SHADERS['reality_warp_glitch'] then G.SHADERS['reality_warp_glitch'] = sh_glitch end
                 pcall(function()
-                    if sh:hasUniform('time') then
-                        sh:send('time', (G.TIMERS and G.TIMERS.REAL) or (love.timer and love.timer.getTime()) or 0)
-                    end
+                    if sh_glitch:hasUniform('time') then sh_glitch:send('time', current_time) end
+                    if sh_glitch:hasUniform('glitch') then sh_glitch:send('glitch', { 0.5, current_time }) end
+                    if sh_glitch:hasUniform('reality_warp_glitch') then sh_glitch:send('reality_warp_glitch', { 0.5, current_time }) end
+                end)
+            end
+            local sh_ghost = G.SHADERS and (G.SHADERS['reality_warp_ghost'] or G.SHADERS['ghost'])
+            if sh_ghost then
+                if not G.SHADERS['ghost'] then G.SHADERS['ghost'] = sh_ghost end
+                if not G.SHADERS['reality_warp_ghost'] then G.SHADERS['reality_warp_ghost'] = sh_ghost end
+                pcall(function()
+                    if sh_ghost:hasUniform('time') then sh_ghost:send('time', current_time) end
+                    if sh_ghost:hasUniform('ghost') then sh_ghost:send('ghost', { 0.5, current_time }) end
+                    if sh_ghost:hasUniform('reality_warp_ghost') then sh_ghost:send('reality_warp_ghost', { 0.5, current_time }) end
                 end)
             end
         end
+    end
+end
+
+local function count_ghost_jokers()
+    local count = 0
+    if G.jokers and G.jokers.cards then
+        for _, j in ipairs(G.jokers.cards) do
+            if j.edition and (j.edition.ghost or j.edition.key == 'e_reality_warp_ghost' or j.edition.type == 'ghost') then
+                count = count + 1
+            elseif j.ability and j.ability.ghost then
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
+if G.FUNCS and G.FUNCS.can_buy then
+    local orig_can_buy = G.FUNCS.can_buy
+    function G.FUNCS.can_buy(e)
+        local card = e.config and e.config.ref_table
+        if card and card.ability and card.ability.set == 'Joker' then
+            local ghost_count = count_ghost_jokers()
+            if ghost_count > 0 and G.jokers and G.jokers.config and G.jokers.config.card_limit then
+                local orig_limit = G.jokers.config.card_limit
+                G.jokers.config.card_limit = orig_limit + ghost_count
+                local ret = orig_can_buy(e)
+                G.jokers.config.card_limit = orig_limit
+                return ret
+            end
+        end
+        return orig_can_buy(e)
+    end
+end
+
+if G.FUNCS and G.FUNCS.can_select_card then
+    local orig_can_select_card = G.FUNCS.can_select_card
+    function G.FUNCS.can_select_card(e)
+        local card = e.config and e.config.ref_table
+        if card and card.ability and card.ability.set == 'Joker' then
+            local ghost_count = count_ghost_jokers()
+            if ghost_count > 0 and G.jokers and G.jokers.config and G.jokers.config.card_limit then
+                local orig_limit = G.jokers.config.card_limit
+                G.jokers.config.card_limit = orig_limit + ghost_count
+                local ret = orig_can_select_card(e)
+                G.jokers.config.card_limit = orig_limit
+                return ret
+            end
+        end
+        return orig_can_select_card(e)
     end
 end
 
@@ -1751,7 +1903,13 @@ if new_round then
         orig_new_round_glitch()
         if G.GAME and G.consumeables then
             local seed = 'glitch_spawn_' .. (G.GAME.round_resets and G.GAME.round_resets.ante or 1) .. '_' .. (G.GAME.round or 0)
-            if pseudorandom(seed) < ((G.GAME and G.GAME.probabilities.normal or 1) / 13) then
+            local den = 20
+            if G.GAME.used_vouchers and (G.GAME.used_vouchers.v_reality_warp_overclock or G.GAME.used_vouchers.v_overclock or G.GAME.used_vouchers.overclock) then
+                den = 5
+            elseif G.GAME.used_vouchers and (G.GAME.used_vouchers.v_reality_warp_error_404 or G.GAME.used_vouchers.v_error_404 or G.GAME.used_vouchers.error_404) then
+                den = 15
+            end
+            if pseudorandom(seed) < ((G.GAME and G.GAME.probabilities.normal or 1) / den) then
                 G.E_MANAGER:add_event(Event({
                     trigger = 'after',
                     func = function()

@@ -705,6 +705,44 @@ local function build_reality_warp_config_tab()
                             }
                         }
                     },
+                    -- Randomize Stake Stickers Button (Permanent)
+                    {
+                        n = G.UIT.R,
+                        config = {
+                            id = "rw_cheat_container",
+                            align = "cm",
+                            padding = 0.08,
+                            r = 0.12,
+                            colour = {0.14, 0.08, 0.22, 0.95},
+                            outline = 1.2,
+                            outline_colour = G.C.GOLD
+                        },
+                        nodes = {
+                            UIBox_button({
+                                button = "rw_apply_random_stake_stickers",
+                                label = { "✦ RANDOMIZE ALL STAKE STICKERS ✦" },
+                                minw = 4.8,
+                                minh = 0.72,
+                                scale = 0.32,
+                                colour = G.C.GOLD,
+                                col = true
+                            }),
+                            {
+                                n = G.UIT.R,
+                                config = { align = "cm", padding = 0.02 },
+                                nodes = {
+                                    {
+                                        n = G.UIT.T,
+                                        config = {
+                                            text = "Randomizes stake win stickers across all Jokers and Decks",
+                                            scale = 0.20,
+                                            colour = G.C.UI.TEXT_LIGHT
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     -- Bottom Status Pill
                     {
                         n = G.UIT.R,
@@ -733,6 +771,90 @@ local function build_reality_warp_config_tab()
     }
 end
 
+G.FUNCS = G.FUNCS or {}
+G.FUNCS.rw_apply_random_stake_stickers = function(e)
+    local profile = G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile]
+    if not profile then return end
+    profile.joker_usage = profile.joker_usage or {}
+    profile.deck_usage = profile.deck_usage or {}
+    profile.deck_stakes = profile.deck_stakes or {}
+
+    local all_stakes = {}
+    if G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake then
+        for i, s in ipairs(G.P_CENTER_POOLS.Stake) do
+            table.insert(all_stakes, { index = i, key = s.key })
+        end
+    end
+    if #all_stakes == 0 then
+        for i = 1, 8 do table.insert(all_stakes, { index = i, key = 'stake_' .. i }) end
+    end
+
+    if G.P_CENTERS then
+        for k, center in pairs(G.P_CENTERS) do
+            if center.set == 'Joker' then
+                profile.joker_usage[k] = profile.joker_usage[k] or {
+                    count = 1,
+                    order = center.order or 1,
+                    wins = {},
+                    losses = {},
+                    wins_by_key = {},
+                    losses_by_key = {}
+                }
+                local ju = profile.joker_usage[k]
+                ju.wins = {}
+                ju.wins_by_key = {}
+                local chosen_stake = pseudorandom_element(all_stakes, pseudoseed('rw_cheat_j_' .. k .. '_' .. math.random(1, 99999)))
+                for _, s in ipairs(all_stakes) do
+                    if s.index <= chosen_stake.index then
+                        ju.wins[s.index] = 1
+                        ju.wins_by_key[s.key] = 1
+                    end
+                end
+            end
+        end
+    end
+
+    if G.P_CENTERS then
+        for k, center in pairs(G.P_CENTERS) do
+            if center.set == 'Back' then
+                profile.deck_usage[k] = profile.deck_usage[k] or {
+                    count = 1,
+                    order = center.order or 1,
+                    wins = {},
+                    losses = {},
+                    wins_by_key = {},
+                    losses_by_key = {}
+                }
+                local du = profile.deck_usage[k]
+                du.wins = {}
+                du.wins_by_key = {}
+                local chosen_stake = pseudorandom_element(all_stakes, pseudoseed('rw_cheat_d_' .. k .. '_' .. math.random(1, 99999)))
+                profile.deck_stakes[k] = chosen_stake.index
+                for _, s in ipairs(all_stakes) do
+                    if s.index <= chosen_stake.index then
+                        du.wins[s.index] = 1
+                        du.wins_by_key[s.key] = 1
+                    end
+                end
+            end
+        end
+    end
+
+    if G.save_progress then G:save_progress() end
+    if G.save_settings then G:save_settings() end
+
+    play_sound('gold_seal', 1.3, 0.9)
+    play_sound('holo1', 1.4, 0.7)
+    attention_text({
+        text = 'STAKE STICKERS RANDOMIZED!',
+        scale = 0.8,
+        hold = 1.5,
+        backdrop_colour = HEX('ffd700'),
+        align = 'cm',
+        offset = { x = 0, y = -1 }
+    })
+end
+
 local mod_init = get_reality_warp_mod()
 if mod_init then
     mod_init.config = mod_init.config or {}
@@ -751,6 +873,7 @@ if mod_init then
     end
     if mod_init.config.secret_power_theme == nil then mod_init.config.secret_power_theme = true end
     if mod_init.config.battle_of_gods == nil then mod_init.config.battle_of_gods = true end
+    if mod_init.config.unlocked_cheat_stickers == nil then mod_init.config.unlocked_cheat_stickers = false end
     mod_init.config_tab = build_reality_warp_config_tab
 end
 if SMODS and SMODS.current_mod then

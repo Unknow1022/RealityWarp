@@ -59,7 +59,7 @@ register_reality_warp_game_mode({
     },
     button_label = 'ENTER NURSERY',
     button_colour = HEX('2E7D32'),
-    button_callback = 'reality_warp_open_nursery_modal',
+    button_callback = 'reality_warp_enter_nursery',
     order = 2
 })
 
@@ -295,6 +295,10 @@ G.FUNCS = G.FUNCS or {}
 
 G.FUNCS.reality_warp_open_other_modes = function(e)
     G.SETTINGS.paused = true
+    if G.trials_joker_area then
+        G.trials_joker_area:remove()
+        G.trials_joker_area = nil
+    end
     G.FUNCS.overlay_menu{
         definition = create_UIBox_reality_warp_other_modes(),
     }
@@ -320,7 +324,7 @@ G.FUNCS.reality_warp_start_botg_run = function(e)
         G.GAME.viewed_back = Back(coliseo_center)
     end
     if G.FUNCS and G.FUNCS.start_run then
-        G.FUNCS.start_run(nil, {
+        G.FUNCS.start_run(e or { config = {} }, {
             deck = coliseo_center and coliseo_center.key or 'b_reality_warp_coliseo',
             stake = 1
         })
@@ -336,25 +340,35 @@ G.FUNCS.reality_warp_botg_setup_run = function(e)
         G.GAME.selected_back = Back(coliseo_center)
         G.GAME.viewed_back = Back(coliseo_center)
     end
-    if G.FUNCS and G.FUNCS.setup_run then
-        G.FUNCS.setup_run()
+    if create_UIBox_run_setup then
+        G.SETTINGS.paused = true
+        G.FUNCS.overlay_menu{ definition = create_UIBox_run_setup() }
+    elseif G.FUNCS and G.FUNCS.setup_run then
+        G.FUNCS.setup_run(e or { config = {}, UIBox = {} })
     end
 end
 
--- Nursery Modal Handler
+-- Nursery Entry & Modal Handlers
+G.FUNCS.reality_warp_enter_nursery = function(e)
+    G.nursery_picker_open = false
+    G.FUNCS.reality_warp_open_nursery_modal(e)
+end
+
 G.FUNCS.reality_warp_open_nursery_modal = function(e)
     G.SETTINGS.paused = true
-    G.nursery_picker_open = false
     if G.UIDEF and G.UIDEF.nursery_tab then
         G.FUNCS.overlay_menu{
             definition = create_UIBox_generic_options({
                 back_func = 'reality_warp_open_other_modes',
                 contents = {
                     {
-                        n = G.UIT.R,
-                        config = { id = 'tab_contents', align = "cm" },
-                        nodes = {
-                            G.UIDEF.nursery_tab('Nursery')
+                        n = G.UIT.O,
+                        config = {
+                            id = 'tab_contents',
+                            object = UIBox{
+                                definition = G.UIDEF.nursery_tab('Nursery'),
+                                config = { offset = { x = 0, y = 0 }, align = 'cm' }
+                            }
                         }
                     }
                 }
@@ -372,10 +386,13 @@ G.FUNCS.reality_warp_open_joker_trials_modal = function(e)
                 back_func = 'reality_warp_open_other_modes',
                 contents = {
                     {
-                        n = G.UIT.R,
-                        config = { id = 'tab_contents', align = "cm" },
-                        nodes = {
-                            G.UIDEF.outsider_trials_tab('Joker Trials')
+                        n = G.UIT.O,
+                        config = {
+                            id = 'tab_contents',
+                            object = UIBox{
+                                definition = G.UIDEF.outsider_trials_tab('Joker Trials'),
+                                config = { offset = { x = 0, y = 0 }, align = 'cm' }
+                            }
                         }
                     }
                 }

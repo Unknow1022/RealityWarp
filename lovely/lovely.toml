@@ -42,6 +42,26 @@ s.sound:setVolume(botg_fade*s.current_volume*s.original_volume*(args.sound_setti
 
 [[patches]]
 [patches.pattern]
+target = 'cardarea.lua'
+pattern = 'function CardArea:draw()'
+match_indent = true
+position = 'after'
+payload = '''
+if not self.cards then self.cards = {} end
+'''
+
+[[patches]]
+[patches.pattern]
+target = 'cardarea.lua'
+pattern = 'for i = 1, #self.cards do'
+match_indent = true
+position = 'before'
+payload = '''
+if not self.cards then self.cards = {} end
+'''
+
+[[patches]]
+[patches.pattern]
 target = 'game.lua'
 pattern = '''if G.round_eval.alignment.offset.y ~= -7.8 then'''
 match_indent = true
@@ -154,4 +174,15 @@ payload = '''
 if reality_warp_prepare_action_draw then
     cards_to_draw, hand_space = reality_warp_prepare_action_draw(cards_to_draw, hand_space)
 end
+'''
+
+# Guard CardArea:draw against nil self.cards
+[[patches]]
+[patches.pattern]
+target = 'cardarea.lua'
+pattern = 'function CardArea:draw()'
+position = 'after'
+match_indent = true
+payload = '''
+    if not self.cards then return end
 '''

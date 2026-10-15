@@ -2700,3 +2700,57 @@ SMODS.Joker {
         end
     end
 }
+
+SMODS.Joker {
+    key = 'maestro',
+    atlas = 'reality_warp_jokers',
+    pos = { x = 1, y = 5 },
+    rarity = 3,
+    cost = 8,
+    blueprint_compat = false,
+    loc_txt = {
+        name = 'Maestro',
+        text = {
+            "Defeating a {C:attention}Boss Blind{} creates",
+            "a random {C:attention}Common{} to {C:rare}Rare{} Joker",
+            "with the {C:dark_edition}Ghost{} effect",
+            "{C:inactive}(Ghosts do not occupy Joker slots){}"
+        }
+    },
+    loc_vars = function(self, info_queue, card)
+        info_queue[#info_queue + 1] = G.P_CENTERS.e_reality_warp_ghost or G.P_CENTERS.e_ghost
+        return { vars = {} }
+    end,
+    calculate = function(self, card, context)
+        if context.end_of_round and not context.blueprint and not context.individual and not context.repetition then
+            if G.GAME and G.GAME.blind and G.GAME.blind.boss then
+                G.E_MANAGER:add_event(Event({
+                    func = function()
+                        local rarity_roll = pseudorandom('maestro_rarity', 1, 100)
+                        local rarity = 1
+                        if rarity_roll > 70 then
+                            rarity = 3
+                        elseif rarity_roll > 35 then
+                            rarity = 2
+                        else
+                            rarity = 1
+                        end
+
+                        local new_joker = create_card('Joker', G.jokers, nil, rarity, nil, nil, nil, 'maestro')
+                        new_joker:set_edition('e_reality_warp_ghost', true)
+                        new_joker:add_to_deck()
+                        G.jokers:emplace(new_joker)
+                        card:juice_up(0.6, 0.4)
+                        play_sound('tarot1')
+                        return true
+                    end
+                }))
+                return {
+                    message = 'Ghost Summoned!',
+                    colour = G.C.DARK_EDITION,
+                    card = card
+                }
+            end
+        end
+    end
+}

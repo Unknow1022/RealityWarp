@@ -390,6 +390,250 @@ SMODS.Voucher {
     end
 }
 
+function get_most_used_jokers(limit)
+    limit = limit or 1
+    local profile = (G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile]) or nil
+    local usage = (profile and profile.joker_usage) or {}
+    local jokers = {}
+    for k, v in pairs(usage) do
+        local center = G.P_CENTERS and G.P_CENTERS[k]
+        if center and center.set == 'Joker' and not center.no_pool_flag then
+            local count = 0
+            if type(v) == 'table' then
+                count = v.count or 0
+                if count == 0 and v.wins then
+                    for _, w in pairs(v.wins) do
+                        count = count + (type(w) == 'number' and w or 1)
+                    end
+                end
+            elseif type(v) == 'number' then
+                count = v
+            end
+            if count > 0 then
+                table.insert(jokers, { key = k, count = count, order = (type(v) == 'table' and v.order) or (center.order or 0) })
+            end
+        end
+    end
+
+    table.sort(jokers, function(a, b)
+        if a.count ~= b.count then
+            return a.count > b.count
+        end
+        return (a.order or 0) < (b.order or 0)
+    end)
+
+    local result = {}
+    for i = 1, math.min(limit, #jokers) do
+        table.insert(result, jokers[i].key)
+    end
+
+    local fallbacks = { 'j_joker', 'j_greedy_joker', 'j_lusty_joker' }
+    local fb_idx = 1
+    while #result < limit and fb_idx <= #fallbacks do
+        local fb = fallbacks[fb_idx]
+        local already = false
+        for _, r in ipairs(result) do if r == fb then already = true; break end end
+        if not already and G.P_CENTERS and G.P_CENTERS[fb] then
+            table.insert(result, fb)
+        end
+        fb_idx = fb_idx + 1
+    end
+
+    return result
+end
+
+local function get_joker_display_name(key)
+    if not key or not (G.P_CENTERS and G.P_CENTERS[key]) then return "-" end
+    local name = nil
+    if localize then
+        pcall(function()
+            name = localize({ type = 'name_text', key = key, set = 'Joker' })
+        end)
+    end
+    if not name or name == '' or string.find(name, 'ERROR') then
+        name = G.P_CENTERS[key].name or key
+    end
+    return name
+end
+
+SMODS.Voucher {
+    key = 'delivery_box',
+    atlas = 'reality_warp_vouchers',
+    pos = { x = 0, y = 5 },
+    cost = 10,
+    loc_txt = {
+        name = 'Delivery Box',
+        text = {
+            "Your most used Joker",
+            "{C:attention}#1#{}",
+            "appears {C:attention}often{} in the shop",
+            "{C:inactive}(regardless of rarity){}"
+        }
+    },
+    loc_vars = function(self, info_queue, card)
+        local top = get_most_used_jokers(1)
+        local name = get_joker_display_name(top[1])
+        return { vars = { name } }
+    end,
+    redeem = function(self, card)
+        G.GAME.used_vouchers = G.GAME.used_vouchers or {}
+        G.GAME.used_vouchers.v_reality_warp_delivery_box = true
+        G.GAME.used_vouchers.v_delivery_box = true
+        G.GAME.used_vouchers.delivery_box = true
+        if G.GAME.current_round and G.GAME.current_round.voucher and G.GAME.current_round.voucher.spawn then
+            G.GAME.current_round.voucher.spawn.v_reality_warp_delivery_box = false
+            G.GAME.current_round.voucher.spawn.v_delivery_box = false
+        end
+    end
+}
+
+SMODS.Voucher {
+    key = 'vip_drone',
+    atlas = 'reality_warp_vouchers',
+    requires = { 'v_reality_warp_delivery_box' },
+    pos = { x = 1, y = 5 },
+    cost = 10,
+    loc_txt = {
+        name = 'VIP Drone',
+        text = {
+            "Your {C:attention}3 most used Jokers{}",
+            "appear {C:attention}often{} in the shop",
+            "{C:inactive,s:0.85}#1#, #2#, #3#{}"
+        }
+    },
+    loc_vars = function(self, info_queue, card)
+        local top = get_most_used_jokers(3)
+        local n1 = get_joker_display_name(top[1])
+        local n2 = get_joker_display_name(top[2])
+        local n3 = get_joker_display_name(top[3])
+        return { vars = { n1, n2, n3 } }
+    end,
+    redeem = function(self, card)
+        G.GAME.used_vouchers = G.GAME.used_vouchers or {}
+        G.GAME.used_vouchers.v_reality_warp_vip_drone = true
+        G.GAME.used_vouchers.v_vip_drone = true
+        G.GAME.used_vouchers.vip_drone = true
+        if G.GAME.current_round and G.GAME.current_round.voucher and G.GAME.current_round.voucher.spawn then
+            G.GAME.current_round.voucher.spawn.v_reality_warp_vip_drone = false
+            G.GAME.current_round.voucher.spawn.v_vip_drone = false
+        end
+    end
+}
+
+local function draw_glitch_voucher_effect(card, layer)
+    if not card or not card.children or not card.children.center then return end
+    if layer and layer ~= 'card' and layer ~= 'both' then return end
+    if card.sprite_facing and card.sprite_facing ~= 'front' then return end
+
+    local current_time = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+
+    local sh = G.SHADERS and (G.SHADERS['reality_warp_glitch'] or G.SHADERS['glitch'])
+    if sh then
+        if not G.SHADERS['glitch'] then G.SHADERS['glitch'] = sh end
+        if not G.SHADERS['reality_warp_glitch'] then G.SHADERS['reality_warp_glitch'] = sh end
+        pcall(function()
+            if sh:hasUniform('time') then sh:send('time', current_time) end
+            if sh:hasUniform('glitch') then sh:send('glitch', { 0.5, current_time }) end
+            if sh:hasUniform('reality_warp_glitch') then sh:send('reality_warp_glitch', { 0.5, current_time }) end
+        end)
+        local sh_name = G.SHADERS['reality_warp_glitch'] and 'reality_warp_glitch' or 'glitch'
+        card.children.center:draw_shader(sh_name, nil, { 0.5, current_time })
+    end
+end
+
+SMODS.Voucher {
+    key = 'error_404',
+    atlas = 'reality_warp_vouchers',
+    pos = { x = 0, y = 6 },
+    cost = 10,
+    unlocked = false,
+    draw = function(self, card, layer)
+        draw_glitch_voucher_effect(card, layer)
+    end,
+    loc_txt = {
+        name = 'ERROR 404',
+        text = {
+            "{C:dark_edition}Glitch{} consumable appears",
+            "more frequently {C:inactive}({C:green}1 in 15{} each round)"
+        },
+        unlock = {
+            "Use a {C:dark_edition}Glitch{} on",
+            "any {C:attention}Joker{}"
+        }
+    },
+    locked_loc_vars = function(self, info_queue, card)
+        return { vars = {} }
+    end,
+    check_for_unlock = function(self, args)
+        if args and args.type == 'rw_used_glitch' then
+            return true
+        end
+        local p = G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile]
+        if p and p.career_stats and (p.career_stats.rw_glitches_used or 0) > 0 then
+            return true
+        end
+        return false
+    end,
+    in_pool = function(self, args)
+        local p = G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile]
+        local used_career = p and p.career_stats and (p.career_stats.rw_glitches_used or 0) > 0
+        local used_run = G.GAME and G.GAME.rw_glitches_used and G.GAME.rw_glitches_used > 0
+        return (used_career or used_run or false)
+    end,
+    redeem = function(self, card)
+        G.GAME.used_vouchers = G.GAME.used_vouchers or {}
+        G.GAME.used_vouchers.v_reality_warp_error_404 = true
+        G.GAME.used_vouchers.v_error_404 = true
+        G.GAME.used_vouchers.error_404 = true
+        if G.GAME.current_round and G.GAME.current_round.voucher and G.GAME.current_round.voucher.spawn then
+            G.GAME.current_round.voucher.spawn.v_reality_warp_error_404 = false
+            G.GAME.current_round.voucher.spawn.v_error_404 = false
+        end
+    end
+}
+
+SMODS.Voucher {
+    key = 'overclock',
+    atlas = 'reality_warp_vouchers',
+    requires = { 'v_reality_warp_error_404' },
+    pos = { x = 1, y = 6 },
+    cost = 10,
+    draw = function(self, card, layer)
+        draw_glitch_voucher_effect(card, layer)
+    end,
+    loc_txt = {
+        name = 'Overclock',
+        text = {
+            "{C:dark_edition}Glitch{} consumable appears",
+            "much more frequently {C:inactive}({C:green}1 in 5{} each round)"
+        }
+    },
+    redeem = function(self, card)
+        G.GAME.used_vouchers = G.GAME.used_vouchers or {}
+        G.GAME.used_vouchers.v_reality_warp_overclock = true
+        G.GAME.used_vouchers.v_overclock = true
+        G.GAME.used_vouchers.overclock = true
+        if G.GAME.current_round and G.GAME.current_round.voucher and G.GAME.current_round.voucher.spawn then
+            G.GAME.current_round.voucher.spawn.v_reality_warp_overclock = false
+            G.GAME.current_round.voucher.spawn.v_overclock = false
+        end
+    end
+}
+
+SMODS.DrawStep {
+    key = 'glitch_vouchers_shader',
+    order = 22,
+    func = function(self, layer)
+        local ck = self.config and self.config.center and (self.config.center.key or self.config.center_key)
+        if ck and (
+            ck == 'v_reality_warp_error_404' or ck == 'v_error_404' or ck == 'error_404' or
+            ck == 'v_reality_warp_overclock' or ck == 'v_overclock' or ck == 'overclock'
+        ) then
+            draw_glitch_voucher_effect(self, layer)
+        end
+    end
+}
+
 local function has_loaded_d20()
     return G.GAME and G.GAME.used_vouchers and (
         G.GAME.used_vouchers.v_reality_warp_loaded_d20 or
@@ -470,6 +714,15 @@ if get_next_voucher_key then
         if count < 4 then
             local attempts = 0
             while attempts < 50 and key and (string.find(key, 'ambrosia') or string.find(key, 'nectar')) do
+                attempts = attempts + 1
+                key = orig_get_next_voucher_key(from_tag)
+            end
+        end
+        local p = G.PROFILES and G.SETTINGS and G.SETTINGS.profile and G.PROFILES[G.SETTINGS.profile]
+        local glitch_used = (p and p.career_stats and (p.career_stats.rw_glitches_used or 0) > 0) or (G.GAME and G.GAME.rw_glitches_used and G.GAME.rw_glitches_used > 0)
+        if not glitch_used then
+            local attempts = 0
+            while attempts < 50 and key and (string.find(key, 'error_404') or string.find(key, 'overclock')) do
                 attempts = attempts + 1
                 key = orig_get_next_voucher_key(from_tag)
             end

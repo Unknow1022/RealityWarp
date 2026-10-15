@@ -33,10 +33,19 @@ SMODS.ConsumableType {
         return SMODS.card_collection_UIBox(pool, { 7, 7 }, {
             back_func = back_f,
             modify_card = function(card, center)
-                card.params.bypass_discovery_center = true
+                card.bypass_discovery_center = true
+                card.bypass_discovery_ui = true
                 card.discovered = true
                 card.unlocked = true
                 card.debuff = false
+                if center then
+                    center.discovered = true
+                    center.unlocked = true
+                end
+                if card.config and card.config.center then
+                    card.config.center.discovered = true
+                    card.config.center.unlocked = true
+                end
             end
         })
     end
@@ -62,10 +71,19 @@ if G.FUNCS then
             definition = SMODS.card_collection_UIBox(pool, { 7, 7 }, {
                 back_func = back_f,
                 modify_card = function(card, center)
-                    card.params.bypass_discovery_center = true
+                    card.bypass_discovery_center = true
+                    card.bypass_discovery_ui = true
                     card.discovered = true
                     card.unlocked = true
                     card.debuff = false
+                    if center then
+                        center.discovered = true
+                        center.unlocked = true
+                    end
+                    if card.config and card.config.center then
+                        card.config.center.discovered = true
+                        card.config.center.unlocked = true
+                    end
                 end
             })
         }
@@ -89,10 +107,12 @@ function botg_get_familiar_level(fam_key)
 end
 
 function botg_purge_orphan_familiars()
+    if G.OVERLAY_MENU or (G.STAGE and G.STAGE ~= G.STAGES.RUN) then return end
     if G.I and G.I.CARD then
         for i = #G.I.CARD, 1, -1 do
             local c = G.I.CARD[i]
-            if c and (c.area ~= G.botg_familiars) and (
+            local is_coll = c and c.area and (c.area.config and c.area.config.collection or (c.params and c.params.bypass_discovery_center))
+            if c and not is_coll and (c.area ~= G.botg_familiars) and (
                 (c.config and c.config.center and c.config.center.set == 'Familiar') or
                 (c.ability and c.ability.set == 'Familiar')
             ) then

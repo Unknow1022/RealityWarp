@@ -8,6 +8,7 @@ extern PRECISION vec2 mouse_screen_pos;
 extern PRECISION float hovering;
 extern PRECISION float screen_scale;
 extern PRECISION vec2 glitch;
+extern PRECISION vec2 reality_warp_glitch;
 extern PRECISION float time;
 
 #ifdef VERTEX
@@ -86,49 +87,57 @@ vec4 effect( vec4 colour, Image texture, vec2 texture_coords, vec2 screen_coords
 
     vec2 uv = (((texture_coords) * (image_details)) - texture_details.xy * texture_details.ba) / texture_details.ba;
 
-    float curr_t = (time > 0.0 ? time : (glitch.y != 0.0 ? glitch.y : (glitch.x != 0.0 ? glitch.x : 1.0)));
-    float sec_mode = mod(floor(curr_t), 5.0); // 5 distinct glitch modes, 1 per second
-    float fast_t = curr_t * 30.0;             // High-frequency tick
+    // Use continuous real-time clock: advances 1 second every real second everywhere
+    float t_clock = time;
+    if (t_clock <= 0.0) t_clock = glitch.y;
+    if (t_clock <= 0.0) t_clock = reality_warp_glitch.y;
+    if (t_clock <= 0.0) t_clock = (glitch.x > 0.0 ? glitch.x : reality_warp_glitch.x);
+    if (t_clock <= 0.0) t_clock = 1.0;
+    float curr_t = t_clock;
+    float sec = floor(curr_t);
+    float sec_mode = mod(sec, 8.0); // 8 distinct glitch styles swapping every 1.0s
+    float fast_t = curr_t * 30.0;   // High-frequency 30 FPS tick
     float t_step = floor(fast_t);
-    float strobe_step = floor(curr_t * 24.0); // Discrete high-speed color strobe step
+    float strobe_step = floor(curr_t * 24.0);
 
-    // Mode-dependent slice parameters - constantly tearing and slicing the shape
-    float slice_freq = (sec_mode < 1.0) ? 44.0 : ((sec_mode < 3.0) ? 28.0 : 60.0);
-    float slice_intensity = (sec_mode < 1.0) ? 0.20 : ((sec_mode < 3.0) ? 0.14 : 0.18);
+    // Procedural style randomness generated per second
+    float sec_rand1 = g_hash(vec2(sec, 3.17));
+    float sec_rand2 = g_hash(vec2(sec, 7.89));
 
-    // Continuous horizontal scanline slice displacement (always active, no pauses)
+    // Dynamic slice displacement based on active style
+    float slice_freq = 24.0 + sec_rand1 * 40.0;
+    float slice_intensity = 0.12 + sec_rand2 * 0.12;
+
     float slice_y = floor(uv.y * slice_freq);
     float slice_offset = (g_hash(vec2(slice_y * 3.7, t_step * 1.3)) - 0.5) * slice_intensity;
 
-    // Fast digital block artifacts & corrupt noise tiles (constantly active)
-    vec2 block_size = (sec_mode < 2.0) ? vec2(10.0, 16.0) : vec2(18.0, 26.0);
+    // Digital block artifacts & corrupt noise tiles
+    vec2 block_size = vec2(8.0 + floor(sec_rand1 * 14.0), 12.0 + floor(sec_rand2 * 18.0));
     vec2 block_grid = floor(uv * block_size);
     float block_hash = g_hash(block_grid + vec2(t_step * 0.17, t_step * 0.43));
     float is_corrupt_block = step(0.55, block_hash);
     vec2 block_offset = (vec2(g_hash(block_grid), g_hash(block_grid + 2.1)) - 0.5) * 0.10 * is_corrupt_block;
 
-    // Continuous sine-wave glitch ripple warping the silhouette and shape
+    // Continuous sine-wave glitch ripple
     float wave_tear = sin(uv.y * 35.0 + fast_t * 1.5) * 0.03;
     slice_offset += wave_tear;
 
-    // Rolling CRT disturbance bar in mode 2
+    // Rolling CRT bar in styles 2 and 6
     float roll_bar = 0.0;
-    if (sec_mode >= 2.0 && sec_mode < 3.0) {
+    if (sec_mode == 2.0 || sec_mode == 6.0) {
         float roll_y = fract(curr_t * 1.2);
         roll_bar = smoothstep(0.12, 0.0, abs(uv.y - roll_y));
         slice_offset += sin(uv.y * 30.0 + fast_t) * 0.06 * roll_bar;
     }
 
-    // Displaced UV texture coordinates strictly clamped to [0.002, 0.998] to prevent sampling adjacent atlas textures
+    // Clamp displaced UV to prevent sprite atlas bleeding
     vec2 displaced_uv = clamp(uv + vec2(slice_offset, 0.0) + block_offset, vec2(0.002), vec2(0.998));
 
-    // Chromatic aberration (RGB channel offsets strictly clamped inside this card sprite)
-    float base_split = (sec_mode < 1.0) ? 0.030 : ((sec_mode < 3.0) ? 0.018 : 0.024);
-    float split_amt = base_split + 0.025 * abs(slice_offset) + 0.020 * roll_bar;
-
+    // Chromatic aberration
+    float split_amt = 0.022 + 0.025 * abs(slice_offset) + 0.020 * roll_bar;
     vec2 r_uv = clamp(displaced_uv + vec2(split_amt, 0.0), vec2(0.002), vec2(0.998));
     vec2 g_uv = displaced_uv;
-    vec2 b_uv = clamp(displaced_uv - vec2(split_amt, (sec_mode >= 1.0 && sec_mode < 2.0) ? split_amt * 0.7 : 0.0), vec2(0.002), vec2(0.998));
+    vec2 b_uv = clamp(displaced_uv - vec2(split_amt, (sec_mode >= 1.0 && sec_mode < 3.0) ? split_amt * 0.7 : 0.0), vec2(0.002), vec2(0.998));
 
     vec2 r_tc = (r_uv * texture_details.ba + texture_details.xy * texture_details.ba) / image_details;
     vec2 g_tc = (g_uv * texture_details.ba + texture_details.xy * texture_details.ba) / image_details;
@@ -141,7 +150,7 @@ vec4 effect( vec4 colour, Image texture, vec2 texture_coords, vec2 screen_coords
     vec3 rgb = vec3(tex_r.r, tex_g.g, tex_b.b);
     float alpha = orig_tex.a;
 
-    // High-speed discrete & continuous strobe color palette
+    // High-speed strobe palette
     float color_t = curr_t * 36.0;
     vec3 strobe_palette = vec3(
         sin(color_t + uv.y * 14.0) * 0.5 + 0.5,
@@ -149,7 +158,6 @@ vec4 effect( vec4 colour, Image texture, vec2 texture_coords, vec2 screen_coords
         sin(color_t + 4.188 + (uv.x + uv.y) * 12.0) * 0.5 + 0.5
     );
 
-    // Random stepped RGB strobe flashes
     float flash_hash = g_hash(vec2(strobe_step, 9.17));
     vec3 flash_color = vec3(
         step(0.4, fract(flash_hash * 7.1)),
@@ -157,48 +165,68 @@ vec4 effect( vec4 colour, Image texture, vec2 texture_coords, vec2 screen_coords
         step(0.4, fract(flash_hash * 19.7))
     );
 
-    // 5 Distinct Glitch Effects (Swapping every 1 second)
-    if (sec_mode < 1.0) {
-        // Mode 0: Neon Cyberpunk Slice & High-Speed Strobe
+    // 8 Procedural Glitch Styles (One unique style every second, constantly cycling)
+    if (sec_mode == 0.0) {
+        // Style 0: Cyberpunk Neon Horizontal Slices & Strobe
         if (is_corrupt_block > 0.5) {
             rgb = mix(1.0 - rgb, strobe_palette, 0.75);
         } else {
             float scanline = sin(uv.y * 220.0 + fast_t * 3.0) * 0.5 + 0.5;
             rgb = mix(rgb, rgb * strobe_palette * 1.8, 0.55 + 0.25 * scanline);
         }
-    } else if (sec_mode < 2.0) {
-        // Mode 1: Digital Voxel Bit-Inversion & Diagonal Glitch
+    } else if (sec_mode == 1.0) {
+        // Style 1: Digital Voxel Bit-Inversion & Diagonal Glitch
         if (is_corrupt_block > 0.5) {
             rgb = mix(vec3(1.0) - rgb, flash_color, 0.65);
         } else {
             rgb.rb = mix(rgb.rb, rgb.br, 0.5 + 0.5 * sin(fast_t));
             rgb = mix(rgb, strobe_palette * 1.4, 0.35);
         }
-    } else if (sec_mode < 3.0) {
-        // Mode 2: CRT Rolling Bar & Phosphor Scanlines
+    } else if (sec_mode == 2.0) {
+        // Style 2: CRT Rolling Bar & Phosphor Scanlines
         float crt_scan = sin(uv.y * 320.0) * 0.5 + 0.5;
         rgb *= (0.75 + 0.35 * crt_scan);
         if (roll_bar > 0.2) {
             rgb = mix(1.0 - rgb, strobe_palette * 2.0, 0.70);
         }
         rgb = mix(rgb, rgb * vec3(0.5, 1.4, 1.2), 0.30);
-    } else if (sec_mode < 4.0) {
-        // Mode 3: Thermal Solarization & Channel Rotation
+    } else if (sec_mode == 3.0) {
+        // Style 3: Thermal Solarization & Channel Rotation
         rgb = abs(sin(rgb * 3.14159 + color_t * 0.5));
         rgb = mix(rgb, strobe_palette, 0.40);
         if (fract(fast_t * 0.25) > 0.75) {
             rgb = rgb.bgr;
         }
-    } else {
-        // Mode 4: High-Contrast Static & Binary Glitch Noise
+    } else if (sec_mode == 4.0) {
+        // Style 4: High-Contrast Static & Binary Glitch Noise
         vec3 threshold_rgb = step(vec3(0.5), rgb + (flash_hash - 0.5) * 0.4);
         rgb = mix(rgb, threshold_rgb * strobe_palette * 1.5, 0.60);
         if (is_corrupt_block > 0.5) {
             rgb = flash_color;
         }
+    } else if (sec_mode == 5.0) {
+        // Style 5: Emerald Green Matrix Cascade & Code Corruption
+        float matrix_lines = sin(uv.y * 180.0 - fast_t * 4.0) * 0.5 + 0.5;
+        vec3 green_code = vec3(0.1, 0.95, 0.3) * (matrix_lines * 1.4 + 0.4);
+        rgb = mix(rgb * vec3(0.3, 1.2, 0.4), green_code, 0.45);
+        if (is_corrupt_block > 0.5) {
+            rgb = vec3(0.2, 1.0, 0.5);
+        }
+    } else if (sec_mode == 6.0) {
+        // Style 6: Negative Acid Melt & Cyan-Magenta Inversion
+        rgb = vec3(1.0) - rgb;
+        rgb.rg = mix(rgb.rg, rgb.gr, 0.6 + 0.4 * sin(fast_t * 2.0));
+        rgb *= vec3(0.8, 1.2, 1.5);
+    } else {
+        // Style 7: Deep Violet Quantum Warp & Strobe Silhouette
+        rgb.rb = mix(rgb.rb, vec2(1.0, 0.3), 0.4 + 0.3 * sin(fast_t));
+        rgb *= (sin(uv.y * 240.0) * 0.2 + 0.9);
+        if (is_corrupt_block > 0.5) {
+            rgb = mix(rgb, vec3(0.7, 0.2, 1.0), 0.8);
+        }
     }
 
-    // High frequency white / strobe noise bursts
+    // High frequency static burst
     float static_noise = g_hash(uv * 180.0 + vec2(fast_t * 1.3, -fast_t * 1.7));
     if (static_noise > 0.91) {
         rgb = mix(rgb, (flash_hash > 0.5 ? vec3(1.0) : flash_color), 0.85);

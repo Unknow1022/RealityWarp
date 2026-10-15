@@ -2657,6 +2657,16 @@ jd_def["j_reality_warp_mad_ghost"] = {
     }
 }
 
+jd_def["j_reality_warp_maestro"] = {
+    text = {
+        { text = "+1 Ghost Joker" }
+    },
+    text_config = { colour = G.C.DARK_EDITION },
+    reminder_text = {
+        { text = "(On Boss Blind)" }
+    }
+}
+
 local new_entries = {}
 for k, v in pairs(jd_def) do
     if string.sub(k, 1, 15) == "j_reality_warp_" then
