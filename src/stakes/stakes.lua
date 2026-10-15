@@ -513,10 +513,10 @@ function Card:draw(layer)
             local fire_col = get_stake_fire_color(st)
             if fire_col then
                 prep_draw(self, 1)
-                local sw = self.T.w * 0.38
-                local sh = self.T.h * 0.38
-                local sx = self.T.w * 0.5 - sw * 0.5
-                local sy = self.T.h * 0.18 - sh * 0.5
+                local sw = self.T.w * 0.36
+                local sh = self.T.h * 0.36
+                local sx = self.T.w * 0.19 - sw * 0.5
+                local sy = self.T.h * 0.16 - sh * 0.5
                 draw_stake_fire(sx, sy, sw, sh, fire_col)
                 love.graphics.pop()
             end
