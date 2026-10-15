@@ -54,6 +54,7 @@ local files = {
     "src/core/cauldron_synthesis.lua",
     "src/core/other_modes.lua",
     "src/core/apagon.lua",
+    "src/core/bomba.lua",
 
     -- Jokers
     "src/jokers/common.lua",

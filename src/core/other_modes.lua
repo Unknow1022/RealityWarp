@@ -104,6 +104,28 @@ register_reality_warp_game_mode({
     order = 4
 })
 
+register_reality_warp_game_mode({
+    id = 'bomba',
+    title = 'TIME BOMB',
+    badge = 'SURVIVAL',
+    badge_colour = HEX('dc2626'),
+    desc_lines = {
+        "A ticking time bomb threatens the table.",
+        "Pulsing red alert flashes across the room.",
+        "Start with 50 seconds to win the round.",
+        "Blind victory adds +40s; buy time at $1 for +10s."
+    },
+    features = {
+        "Continuous Red Alert Pulsing Screen",
+        "50s Round Timer (+40s per Blind Won)",
+        "Emergency Time Purchase: $1 = +10s"
+    },
+    button_label = 'PLAY TIME BOMB',
+    button_colour = HEX('dc2626'),
+    button_callback = 'reality_warp_start_bomba_run',
+    order = 5
+})
+
 -- ----------------------------------------------------------------------------
 -- UI Builder: Other Game Modes Hub (Compact & Proportionate)
 -- ----------------------------------------------------------------------------
@@ -232,7 +254,7 @@ function create_UIBox_reality_warp_other_modes()
     local row2_nodes = {}
 
     for i, mode in ipairs(modes) do
-        if i <= 2 then
+        if i <= 3 then
             table.insert(row1_nodes, create_mode_card(mode))
         else
             table.insert(row2_nodes, create_mode_card(mode))
