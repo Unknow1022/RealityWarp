@@ -20,6 +20,91 @@ local JOKER_GHOST_KEYS = {
 }
 
 -- ----------------------------------------------------------------------------
+-- Audio: fire_loop Registration & Continuous Loop Controller
+-- ----------------------------------------------------------------------------
+
+if SMODS and SMODS.Sound then
+    SMODS.Sound {
+        key = 'fire_loop',
+        path = 'fire_loop.mp3'
+    }
+end
+
+local fire_loop_source = nil
+
+local function start_fire_loop()
+    if fire_loop_source and fire_loop_source:isPlaying() then return end
+    if not fire_loop_source then
+        local mod_path = (SMODS and SMODS.current_mod and SMODS.current_mod.path) or ""
+        local candidates = {
+            mod_path .. "assets/sounds/fire_loop.mp3",
+            "assets/sounds/fire_loop.mp3",
+            mod_path .. "fire_loop.mp3"
+        }
+        for _, path in ipairs(candidates) do
+            local ok, src = pcall(love.audio.newSource, path, "stream")
+            if ok and src then
+                fire_loop_source = src
+                break
+            end
+        end
+    end
+    if fire_loop_source then
+        pcall(function()
+            fire_loop_source:setLooping(true)
+            fire_loop_source:setVolume(0.50)
+            fire_loop_source:play()
+        end)
+    end
+end
+
+local function stop_fire_loop()
+    if fire_loop_source then
+        pcall(function()
+            fire_loop_source:stop()
+        end)
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- Random Deck & Sleeve Picker
+-- ----------------------------------------------------------------------------
+
+local function get_random_apagon_deck_and_sleeve()
+    local available_decks = {}
+    if G.P_CENTER_POOLS and G.P_CENTER_POOLS['Back'] then
+        for _, center in ipairs(G.P_CENTER_POOLS['Back']) do
+            if center and center.key and center.key ~= 'b_coliseo' then
+                table.insert(available_decks, center.key)
+            end
+        end
+    end
+    if #available_decks == 0 then
+        available_decks = {
+            'b_red', 'b_blue', 'b_yellow', 'b_green', 'b_black',
+            'b_magic', 'b_nebula', 'b_ghost', 'b_abandoned', 'b_checkered',
+            'b_zodiac', 'b_painted', 'b_anaglyph', 'b_plasma', 'b_erratic'
+        }
+    end
+    local chosen_deck = available_decks[math.random(1, #available_decks)]
+
+    local chosen_sleeve = nil
+    if CardSleeves and CardSleeves.Sleeve and G.P_CENTER_POOLS and G.P_CENTER_POOLS['Sleeve'] then
+        local available_sleeves = {}
+        for _, center in ipairs(G.P_CENTER_POOLS['Sleeve']) do
+            if center and center.key and center.key ~= 'sleeve_casl_none' then
+                table.insert(available_sleeves, center.key)
+            end
+        end
+        if #available_sleeves > 0 then
+            chosen_sleeve = available_sleeves[math.random(1, #available_sleeves)]
+        end
+    end
+
+    return chosen_deck, chosen_sleeve
+end
+
+-- ----------------------------------------------------------------------------
 -- Mode Launch Handler
 -- ----------------------------------------------------------------------------
 
@@ -31,6 +116,7 @@ G.FUNCS.reality_warp_start_apagon_run = function(e)
         G.FUNCS.exit_overlay_menu()
     end
 
+    stop_fire_loop()
     G.apagon_active = true
     G.apagon_starting = true
     G.apagon_intro_timer = 0
@@ -40,12 +126,26 @@ G.FUNCS.reality_warp_start_apagon_run = function(e)
     G.apagon_dissolve_particles = {}
     G.apagon_spawn_timer = 2.0
 
+    local chosen_deck, chosen_sleeve = get_random_apagon_deck_and_sleeve()
+    local run_args = {
+        deck = chosen_deck,
+        stake = 1,
+        apagon = true
+    }
+    if chosen_sleeve then
+        run_args.casl_sleeve_choice = chosen_sleeve
+        run_args.sleeve = chosen_sleeve
+        if G.GAME then G.GAME.selected_sleeve = chosen_sleeve end
+        G.viewed_sleeve = chosen_sleeve
+        G._last_selected_sleeve = chosen_sleeve
+    end
+    if G.P_CENTERS and G.P_CENTERS[chosen_deck] and Back then
+        G.GAME.selected_back = Back(G.P_CENTERS[chosen_deck])
+        G.GAME.viewed_back = Back(G.P_CENTERS[chosen_deck])
+    end
+
     if G.FUNCS and G.FUNCS.start_run then
-        G.FUNCS.start_run(nil, {
-            deck = 'b_red',
-            stake = 1,
-            apagon = true
-        })
+        G.FUNCS.start_run(nil, run_args)
     end
     if G.GAME then
         G.GAME.apagon_active = true
@@ -73,6 +173,7 @@ function Game:start_run(args)
         G.apagon_dissolve_particles = {}
         G.apagon_spawn_timer = 2.5
     else
+        stop_fire_loop()
         G.apagon_active = false
         G.apagon_ghosts = {}
         G.apagon_particles = {}
@@ -81,6 +182,7 @@ end
 
 local orig_game_main_menu = Game.main_menu
 function Game:main_menu(change_context)
+    stop_fire_loop()
     G.apagon_active = false
     G.apagon_starting = nil
     if orig_game_main_menu then orig_game_main_menu(self, change_context) end
@@ -95,7 +197,10 @@ function Game:update(dt)
     if orig_game_update then orig_game_update(self, dt) end
 
     local is_active = G.apagon_active or (G.GAME and G.GAME.apagon_active)
-    if not is_active then return end
+    if not is_active then
+        stop_fire_loop()
+        return
+    end
     G.apagon_active = true
 
     if G.SETTINGS.paused then return end
@@ -108,8 +213,11 @@ function Game:update(dt)
         G.apagon_intro_timer = G.apagon_intro_timer + dt
         if G.apagon_intro_timer >= 1.2 then
             G.apagon_lantern_on = true
-            play_sound('fire1', 1.15, 0.85)
-            play_sound('tarot1', 1.3, 0.7)
+            -- Low-pitched chip sound when fire appears on screen
+            pcall(play_sound, 'chips1', 0.72, 0.9)
+            pcall(play_sound, 'tarot1', 1.3, 0.7)
+            start_fire_loop()
+
             -- Initial fiery burst at mouse
             for _ = 1, 24 do
                 table.insert(G.apagon_particles, {
@@ -129,6 +237,11 @@ function Game:update(dt)
             end
         end
         return
+    else
+        -- Ensure fire_loop keeps playing continuously throughout the run
+        if not fire_loop_source or not fire_loop_source:isPlaying() then
+            start_fire_loop()
+        end
     end
 
     -- 2. Emit fiery orange, red, and yellow lantern particles at cursor
@@ -198,7 +311,7 @@ function Game:update(dt)
             seed = math.random(1, 99999),
             hover_time = 0
         })
-        play_sound('whoosh', 0.85, 0.6)
+        pcall(play_sound, 'whoosh1', 0.85, 0.6)
     end
 
     -- 4. Update Ghosts & Check Lantern Collision
@@ -238,8 +351,8 @@ function Game:update(dt)
 
             -- Ghost vanished!
             if g.health <= 0 then
-                play_sound('tarot1', 1.4, 0.8)
-                play_sound('holo1', 1.3, 0.75)
+                pcall(play_sound, 'tarot1', 1.4, 0.8)
+                pcall(play_sound, 'holo1', 1.3, 0.75)
                 for _ = 1, 18 do
                     table.insert(G.apagon_dissolve_particles, {
                         x = g.x + math.random(-20, 20),
@@ -263,7 +376,8 @@ function Game:update(dt)
 
     -- 5. Game Over Condition: 7 Ghosts accumulate!
     if #G.apagon_ghosts >= 7 and G.STATE ~= G.STATES.GAME_OVER then
-        play_sound('cancel', 0.8, 1.0)
+        stop_fire_loop()
+        pcall(play_sound, 'cancel', 0.8, 1.0)
         G.STATE = G.STATES.GAME_OVER
         G.STATE_COMPLETE = false
         if attention_text then
