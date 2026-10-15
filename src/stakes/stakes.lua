@@ -482,6 +482,21 @@ function Card:draw(layer)
 
     -- Draw fire particles on stake win stickers and ability stickers attached to cards
     if (layer == 'card' or layer == 'both' or not layer) and prep_draw then
+        local is_legendary = self.config and self.config.center and (
+            self.config.center.soul_pos or
+            self.config.center.rarity == 4 or
+            self.children.floating_sprite ~= nil or
+            self.config.center.legendary == true
+        )
+        local float_x, float_y, rot_mod, sc_mod = 0, 0, 0, 0
+        if is_legendary then
+            local real_t = (G.TIMERS and G.TIMERS.REAL) or (love.timer and love.timer.getTime()) or 0
+            sc_mod = 0.05 + 0.04 * math.sin(1.8 * real_t) + 0.04 * math.sin((real_t - math.floor(real_t)) * math.pi * 14) * (1 - (real_t - math.floor(real_t))) ^ 3
+            rot_mod = 0.08 * math.sin(1.219 * real_t) + 0.04 * math.sin(real_t * math.pi * 5) * (1 - (real_t - math.floor(real_t))) ^ 2
+            float_y = math.sin(1.8 * real_t) * (self.T.h * 0.035)
+            float_x = math.cos(1.219 * real_t) * (self.T.w * 0.02)
+        end
+
         local st = self.sticker
         if not st and self.config and self.config.center and get_joker_win_sticker then
             st = get_joker_win_sticker(self.config.center)
@@ -493,6 +508,12 @@ function Card:draw(layer)
             local fire_col = get_stake_fire_color(st)
             if fire_col then
                 prep_draw(self, 1)
+                if is_legendary then
+                    love.graphics.translate(self.T.w * 0.5 + float_x, self.T.h * 0.5 + float_y)
+                    love.graphics.rotate(rot_mod)
+                    love.graphics.scale(1 + sc_mod, 1 + sc_mod)
+                    love.graphics.translate(-self.T.w * 0.5, -self.T.h * 0.5)
+                end
                 local sw = self.T.w * 0.36
                 local sh = self.T.h * 0.36
                 local sx = self.T.w * 0.81 - sw * 0.5
@@ -506,6 +527,12 @@ function Card:draw(layer)
             local fire_col = get_stake_fire_color('weakened')
             if fire_col then
                 prep_draw(self, 1)
+                if is_legendary then
+                    love.graphics.translate(self.T.w * 0.5 + float_x, self.T.h * 0.5 + float_y)
+                    love.graphics.rotate(rot_mod)
+                    love.graphics.scale(1 + sc_mod, 1 + sc_mod)
+                    love.graphics.translate(-self.T.w * 0.5, -self.T.h * 0.5)
+                end
                 local sw, sh = self.T.w * 0.32, self.T.h * 0.32
                 draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
                 love.graphics.pop()
