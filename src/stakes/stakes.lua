@@ -425,7 +425,7 @@ if get_stake_sprite then
         if stake_key == 'stake_reality_warp_big' or stake_key == 'stake_big' or stake_key == 'big' then
             is_big = true
         end
-        if is_big then
+        if is_big and (_scale or 1) >= 1.0 then
             _scale = (_scale or 1) * 1.3
         end
         local sprite = orig_get_stake_sprite(_stake, _scale)
@@ -563,110 +563,7 @@ function init_localization()
     register_mod_stake_sticker_loc()
 end
 
--- Hook: Widen Stake Menu when Big Stake is selected or in applied stakes
-if G.UIDEF and G.UIDEF.SMODS_current_stake then
-    local orig_SMODS_current_stake = G.UIDEF.SMODS_current_stake
-    function G.UIDEF.SMODS_current_stake()
-        local current_stake_key = G.GAME and G.GAME.stake and G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake and G.P_CENTER_POOLS.Stake[G.GAME.stake] and G.P_CENTER_POOLS.Stake[G.GAME.stake].key
-        if not current_stake_key or not SMODS or not SMODS.build_stake_chain then return orig_SMODS_current_stake() end
-        
-        local stake_chain = SMODS.build_stake_chain(G.P_STAKES[current_stake_key])
-        local applied_stakes = {}
-        for i, v in ipairs(G.P_CENTER_POOLS.Stake) do
-            if stake_chain[i] and v.key ~= current_stake_key then
-                applied_stakes[#applied_stakes+1] = v.key
-            end
-        end
-        applied_stakes[#applied_stakes+1] = current_stake_key
 
-        local has_big = false
-        for _, k in ipairs(applied_stakes) do
-            if k == 'stake_reality_warp_big' or k == 'big' or k == 'stake_big' then
-                has_big = true
-                break
-            end
-        end
-
-        if not has_big then
-            return orig_SMODS_current_stake()
-        end
-
-        local stakes = {}
-        local applied_stake
-        for i, key in ipairs(applied_stakes) do
-            local _stake_center = G.P_STAKES[key]
-            local order = _stake_center.order
-            local _stake_desc = {}
-            if _stake_center then
-                local t, res = {}, {}
-                if _stake_center.loc_vars and type(_stake_center.loc_vars) == 'function' then
-                    res = _stake_center:loc_vars({}) or {}
-                end
-                t.vars = res.vars or {}
-                t.key = res.key or _stake_center.key
-                t.set = res.set or _stake_center.set
-                localize{type = 'descriptions', key = t.key, set = t.set, nodes = _stake_desc, vars = t.vars}
-                if _stake_center.applied_stakes and #_stake_center.applied_stakes > 0 then _stake_desc[#_stake_desc] = nil end
-            end
-            local stake_sprite = get_stake_sprite(order, 0.8)
-
-            local stake_node = {n=G.UIT.R, config={align = "cl", padding = 0.06, minw = 7.7}, nodes={
-                {n=G.UIT.C, config={align = "cm", padding = 0.1, minw = 1.3, r=true, colour=G.C.BLACK}, nodes={
-                    {n=G.UIT.O, config={object = stake_sprite}}
-                }},
-                {n=G.UIT.C, config={align='cm'}, nodes = {
-                    {n=G.UIT.C, config={align = "cm", padding = 0.05, colour = get_stake_col(order), r = 0.05, stretch = true, diff = i < #applied_stakes and 1.3 or 2.4}, nodes={
-                        {n=G.UIT.R, config={align = "cm", padding = 0.05, colour = adjust_alpha(G.C.WHITE, 0.95), r = 0.05, minw = 5.9, stretch = true, diff = i < #applied_stakes and 1.4 or 2.5}, nodes={
-                            {n=G.UIT.R, config={align = "cm", padding = 0.03, minh = 0.7, minw = 4.1}, nodes={transparent_multiline_text(_stake_desc)}}
-                        }}
-                    }}
-                }},
-                {n=G.UIT.C, config={minw = 0.15}}
-            }}
-            if i < #applied_stakes then
-                table.insert(stakes, 1, stake_node)
-            else
-                applied_stake = stake_node
-            end
-        end
-
-        local box = SMODS.UIScrollBox({
-            content = {
-                definition = {n = G.UIT.ROOT, config = { align = "cm", colour = G.C.CLEAR, minw = 7.7 }, nodes = stakes},
-                config = { align = "cm" },
-            },
-            overflow = {node_config = {maxh = 4.7}},
-            sync_mode = "offset",
-        })
-        local current_col = {
-            {n=G.UIT.C, config = {align='tl', r=true, colour=G.C.BLACK, padding = 0.08, minw = 7.9}, nodes = {
-                applied_stake,
-                {n=G.UIT.R, config = {minh = 0.05, colour = G.C.L_BLACK}},
-                {n=G.UIT.R, nodes = {{n=G.UIT.O, config = { object = box }}}}
-            }}
-        }
-        if box then
-            local bar = SMODS.GUI.scrollbar({
-                h = 6,
-                w = 0.3,
-                knob_h = 0.8,
-                colour = G.C.RED,
-                bg_colour = { 0, 0, 0, 0.15 },
-                scroll_collision_obj = box,
-                scroll_mult = 1.6,
-            })
-            bar.config.align = "tm"
-            table.insert(current_col, bar)
-        end
-        
-        return {n=G.UIT.ROOT, config={align = "cm", colour = G.C.CLEAR, r = 0.1, padding = 0.1}, nodes={
-            {n=G.UIT.R, config={align = "cm", padding = 0.05}, nodes={
-                {n=G.UIT.T, config={text = 'Applied stakes', scale = 0.65, colour = G.C.WHITE}}
-            }},
-            {n=G.UIT.R, config = {align = 'cm', padding = 0.2}, nodes = current_col}
-        }}
-    end
-end
 
 if G.UIDEF and G.UIDEF.viewed_stake_option then
     local orig_viewed_stake_option = G.UIDEF.viewed_stake_option

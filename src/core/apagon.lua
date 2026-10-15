@@ -3,6 +3,7 @@
 -- ============================================================================
 
 G.apagon_active = false
+G.apagon_starting = false
 G.apagon_intro_timer = 0
 G.apagon_lantern_on = false
 G.apagon_ghosts = {}
@@ -31,17 +32,19 @@ G.FUNCS.reality_warp_start_apagon_run = function(e)
     end
 
     G.apagon_active = true
+    G.apagon_starting = true
     G.apagon_intro_timer = 0
     G.apagon_lantern_on = false
     G.apagon_ghosts = {}
     G.apagon_particles = {}
     G.apagon_dissolve_particles = {}
-    G.apagon_spawn_timer = 3.0
+    G.apagon_spawn_timer = 2.0
 
     if G.FUNCS and G.FUNCS.start_run then
-        G.FUNCS.start_run(e or { config = {} }, {
+        G.FUNCS.start_run(nil, {
             deck = 'b_red',
-            stake = 1
+            stake = 1,
+            apagon = true
         })
     end
     if G.GAME then
@@ -55,20 +58,32 @@ end
 
 local orig_game_start_run = Game.start_run
 function Game:start_run(args)
+    local is_apagon = G.apagon_starting or G.apagon_active or (args and args.apagon) or (self.GAME and self.GAME.apagon_active)
+    G.apagon_starting = nil
+
     if orig_game_start_run then orig_game_start_run(self, args) end
-    if self.GAME and self.GAME.apagon_active then
+
+    if is_apagon then
+        if self.GAME then self.GAME.apagon_active = true end
         G.apagon_active = true
         G.apagon_intro_timer = 0
         G.apagon_lantern_on = false
         G.apagon_ghosts = {}
         G.apagon_particles = {}
         G.apagon_dissolve_particles = {}
-        G.apagon_spawn_timer = 3.0
+        G.apagon_spawn_timer = 2.5
     else
         G.apagon_active = false
         G.apagon_ghosts = {}
         G.apagon_particles = {}
     end
+end
+
+local orig_game_main_menu = Game.main_menu
+function Game:main_menu(change_context)
+    G.apagon_active = false
+    G.apagon_starting = nil
+    if orig_game_main_menu then orig_game_main_menu(self, change_context) end
 end
 
 -- ----------------------------------------------------------------------------
@@ -79,7 +94,10 @@ local orig_game_update = Game.update
 function Game:update(dt)
     if orig_game_update then orig_game_update(self, dt) end
 
-    if not G.apagon_active or not G.GAME or not G.GAME.apagon_active then return end
+    local is_active = G.apagon_active or (G.GAME and G.GAME.apagon_active)
+    if not is_active then return end
+    G.apagon_active = true
+
     if G.SETTINGS.paused then return end
 
     local mx, my = love.mouse.getPosition()
@@ -262,7 +280,7 @@ function Game:update(dt)
 end
 
 -- ----------------------------------------------------------------------------
--- Render Hook: Flying Ghosts & Darkness Overlay with Lantern Stencil
+-- Ghost Renderer
 -- ----------------------------------------------------------------------------
 
 local function draw_apagon_ghosts(mx, my, lantern_radius)
@@ -271,43 +289,46 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
         local dx = g.x - mx
         local dy = g.y - my
         local dist = math.sqrt(dx * dx + dy * dy)
-        local illuminated = dist <= lantern_radius
+        local illuminated = G.apagon_lantern_on and (dist <= lantern_radius)
 
         love.graphics.push('all')
         love.graphics.translate(g.x, g.y)
-        -- Hover tilt
         love.graphics.rotate(math.sin(t * 3.0 + g.seed) * 0.08)
 
-        local alpha = illuminated and 0.88 or 0.15
-        local scale = 0.75 + math.sin(t * 4.0 + g.seed) * 0.03
+        local scale = 0.85 + math.sin(t * 4.0 + g.seed) * 0.04
 
-        -- Ghost aura glow
-        love.graphics.setBlendMode('add', 'alphamultiply')
-        love.graphics.setColor(0.35, 0.75, 0.95, alpha * 0.5)
-        love.graphics.circle('fill', 0, 0, 42 * scale, 32)
+        if illuminated then
+            -- Full ghostly Joker inside lantern beam
+            love.graphics.setBlendMode('add', 'alphamultiply')
+            love.graphics.setColor(0.35, 0.75, 0.95, 0.55)
+            love.graphics.circle('fill', 0, 0, 44 * scale, 32)
 
-        -- Health bar when taking damage under lantern
-        if illuminated and g.health < 1.0 then
-            love.graphics.setBlendMode('alpha')
-            love.graphics.setColor(0.1, 0.1, 0.1, 0.8)
-            love.graphics.rectangle('fill', -24, -48, 48, 6, 2)
-            love.graphics.setColor(0.9, 0.2, 0.2, 0.95)
-            love.graphics.rectangle('fill', -24, -48, 48 * math.max(0, g.health), 6, 2)
-            love.graphics.setColor(1, 1, 1, 0.9)
-            love.graphics.rectangle('line', -24, -48, 48, 6, 2)
-        end
+            -- Health bar when taking damage under lantern
+            if g.health < 1.0 then
+                love.graphics.setBlendMode('alpha')
+                love.graphics.setColor(0.1, 0.1, 0.1, 0.85)
+                love.graphics.rectangle('fill', -26, -52, 52, 7, 2)
+                love.graphics.setColor(0.9, 0.2, 0.2, 0.95)
+                love.graphics.rectangle('fill', -26, -52, 52 * math.max(0, g.health), 7, 2)
+                love.graphics.setColor(1, 1, 1, 0.9)
+                love.graphics.rectangle('line', -26, -52, 52, 7, 2)
+            end
 
-        -- Draw Joker Center sprite with spectral color
-        local center = G.P_CENTERS and G.P_CENTERS[g.key]
-        if center and G.ASSET_ATLAS and G.ASSET_ATLAS[center.atlas or 'Joker'] then
-            local atlas = G.ASSET_ATLAS[center.atlas or 'Joker']
-            love.graphics.setBlendMode('alpha')
-            love.graphics.setColor(0.85, 0.95, 1.0, alpha)
-            love.graphics.draw(atlas.image, atlas.quads[center.pos.x .. '_' .. center.pos.y] or atlas.quads['1_0'], -35 * scale, -48 * scale, 0, scale, scale)
+            local center = G.P_CENTERS and G.P_CENTERS[g.key]
+            if center and G.ASSET_ATLAS and G.ASSET_ATLAS[center.atlas or 'Joker'] then
+                local atlas = G.ASSET_ATLAS[center.atlas or 'Joker']
+                love.graphics.setBlendMode('alpha')
+                love.graphics.setColor(0.85, 0.95, 1.0, 0.92)
+                love.graphics.draw(atlas.image, atlas.quads[center.pos.x .. '_' .. center.pos.y] or atlas.quads['1_0'], -35 * scale, -48 * scale, 0, scale, scale)
+            else
+                love.graphics.setColor(0.7, 0.9, 1.0, 0.92)
+                love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
+            end
         else
-            -- Fallback spectral card silhouette
-            love.graphics.setColor(0.7, 0.9, 1.0, alpha)
-            love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
+            -- Outside lantern: faint spectral wisp visible through the pitch dark
+            love.graphics.setBlendMode('add', 'alphamultiply')
+            love.graphics.setColor(0.2, 0.5, 0.8, 0.18 + 0.06 * math.sin(t * 3.0 + g.seed))
+            love.graphics.circle('fill', 0, 0, 32 * scale, 24)
         end
 
         love.graphics.pop()
@@ -315,77 +336,129 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
 end
 
 -- ----------------------------------------------------------------------------
--- Love2D Draw Hook: Fullscreen Darkness, Lantern Stencil & Flying Ghost Jokers
+-- Darkness Canvas Generator
 -- ----------------------------------------------------------------------------
 
-if not G.reality_warp_apagon_draw_hooked and love and love.draw then
-    G.reality_warp_apagon_draw_hooked = true
-    local orig_love_draw = love.draw
-    love.draw = function(...)
-        orig_love_draw(...)
+local apagon_canvas = nil
+local function get_apagon_canvas(w, h)
+    if not apagon_canvas or apagon_canvas:getWidth() ~= w or apagon_canvas:getHeight() ~= h then
+        apagon_canvas = love.graphics.newCanvas(w, h)
+    end
+    return apagon_canvas
+end
 
-        if not G.apagon_active or not G.GAME or not G.GAME.apagon_active then return end
+-- ----------------------------------------------------------------------------
+-- Master Darkness & Flashlight Render Pass
+-- ----------------------------------------------------------------------------
 
-        local sw = love.graphics.getWidth()
-        local sh = love.graphics.getHeight()
-        local mx, my = love.mouse.getPosition()
-        local t = love.timer and love.timer.getTime() or 0
-        local lantern_radius = 165 + math.sin(t * 5.0) * 8
+local function render_apagon_overlay()
+    local is_active = G.apagon_active or (G.GAME and G.GAME.apagon_active)
+    if not is_active then return end
+    G.apagon_active = true
 
-        love.graphics.push('all')
-        love.graphics.origin()
-        love.graphics.setShader()
+    local cur_t = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
+    if G.rw_apagon_last_draw_time and math.abs(cur_t - G.rw_apagon_last_draw_time) < 0.0001 then
+        return
+    end
+    G.rw_apagon_last_draw_time = cur_t
 
-        -- 1. Draw flying Ghost Jokers
-        draw_apagon_ghosts(mx, my, lantern_radius)
+    local sw, sh = love.graphics.getDimensions()
+    local mx, my = love.mouse.getPosition()
+    local t = cur_t
+    local lantern_radius = 165 + math.sin(t * 5.0) * 8
 
-        -- 2. Draw dissipation particles
+    love.graphics.push('all')
+    love.graphics.origin()
+    love.graphics.setShader()
+    love.graphics.setCanvas()
+
+    -- 1. Create and render darkness canvas with lantern aperture
+    local canvas = get_apagon_canvas(sw, sh)
+    love.graphics.setCanvas(canvas)
+    love.graphics.clear(0, 0, 0, 0)
+
+    -- Fill canvas with pitch darkness
+    love.graphics.setColor(0.012, 0.012, 0.022, 0.965)
+    love.graphics.rectangle('fill', 0, 0, sw, sh)
+
+    if G.apagon_lantern_on then
+        -- Cut out circular lantern aperture revealing UI underneath
+        love.graphics.setBlendMode('replace')
+        love.graphics.setColor(0, 0, 0, 0)
+        love.graphics.circle('fill', mx, my, lantern_radius, 64)
+
+        -- Feathered edge on the canvas
+        for fe = 1, 6 do
+            local r_fe = lantern_radius + fe * 4
+            local a_fe = (fe / 6) * 0.965
+            love.graphics.setColor(0.012, 0.012, 0.022, a_fe)
+            love.graphics.circle('line', mx, my, r_fe, 64)
+        end
+    end
+
+    love.graphics.setCanvas()
+    love.graphics.setBlendMode('alpha')
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(canvas, 0, 0)
+
+    -- 2. Draw Flying Ghosts
+    draw_apagon_ghosts(mx, my, lantern_radius)
+
+    -- 3. Draw spectral dissipation particles
+    love.graphics.setBlendMode('add', 'alphamultiply')
+    for _, p in ipairs(G.apagon_dissolve_particles) do
+        local prog = p.life / p.max_life
+        love.graphics.setColor(p.col[1], p.col[2], p.col[3], prog * 0.8)
+        love.graphics.circle('fill', p.x, p.y, p.size * prog, 8)
+    end
+
+    -- 4. Lantern effects at mouse cursor
+    if G.apagon_lantern_on then
+        -- Soft atmospheric flashlight beam glow
         love.graphics.setBlendMode('add', 'alphamultiply')
-        for _, p in ipairs(G.apagon_dissolve_particles) do
+        love.graphics.setColor(1.0, 0.65, 0.2, 0.08 + 0.03 * math.sin(t * 4.0))
+        love.graphics.circle('fill', mx, my, lantern_radius, 64)
+
+        -- Fiery rising sparks at mouse cursor (Orange, Red, Yellow)
+        for _, p in ipairs(G.apagon_particles) do
             local prog = p.life / p.max_life
-            love.graphics.setColor(p.col[1], p.col[2], p.col[3], prog * 0.8)
+            love.graphics.setColor(p.col[1], p.col[2], p.col[3], prog * 0.85)
             love.graphics.circle('fill', p.x, p.y, p.size * prog, 8)
         end
 
-        -- 3. Stencil darkness mask: hole at lantern cursor reveals the Balatro UI underneath!
-        if G.apagon_lantern_on then
-            love.graphics.stencil(function()
-                love.graphics.circle('fill', mx, my, lantern_radius, 64)
-            end, 'replace', 1)
-            love.graphics.setStencilTest('equal', 0)
+        -- 5. Ghost Danger HUD Indicator (Centered at top)
+        local num_g = #G.apagon_ghosts
+        local hud_col = (num_g >= 5) and {0.95, 0.2, 0.2, 0.95} or (num_g >= 3 and {0.95, 0.8, 0.15, 0.9} or {0.2, 0.9, 0.5, 0.85})
+        love.graphics.setBlendMode('alpha')
+        love.graphics.setColor(0.05, 0.05, 0.08, 0.88)
+        love.graphics.rectangle('fill', sw * 0.5 - 90, 16, 180, 32, 6)
+        love.graphics.setColor(hud_col[1], hud_col[2], hud_col[3], hud_col[4])
+        love.graphics.rectangle('line', sw * 0.5 - 90, 16, 180, 32, 6)
+        local ghost_text = "GHOSTS: " .. tostring(num_g) .. " / 7"
+        love.graphics.printf(ghost_text, sw * 0.5 - 90, 24, 180, "center")
+    end
+
+    love.graphics.pop()
+end
+
+-- ----------------------------------------------------------------------------
+-- Double Hook: love.draw AND Game.draw
+-- ----------------------------------------------------------------------------
+
+if not G.reality_warp_apagon_draw_hooked then
+    G.reality_warp_apagon_draw_hooked = true
+    if love and love.draw then
+        local orig_love_draw = love.draw
+        love.draw = function(...)
+            orig_love_draw(...)
+            render_apagon_overlay()
         end
-
-        -- Darkness overlay covering entire screen (outside the lantern hole)
-        love.graphics.setColor(0.015, 0.015, 0.025, 0.96)
-        love.graphics.rectangle('fill', 0, 0, sw, sh)
-
-        if G.apagon_lantern_on then
-            love.graphics.setStencilTest()
-
-            -- Soft atmospheric flashlight beam border
-            love.graphics.setBlendMode('add', 'alphamultiply')
-            love.graphics.setColor(1.0, 0.65, 0.2, 0.08 + 0.03 * math.sin(t * 4.0))
-            love.graphics.circle('fill', mx, my, lantern_radius, 64)
-
-            -- Fiery rising sparks at mouse cursor (Orange, Red, Yellow)
-            for _, p in ipairs(G.apagon_particles) do
-                local prog = p.life / p.max_life
-                love.graphics.setColor(p.col[1], p.col[2], p.col[3], prog * 0.85)
-                love.graphics.circle('fill', p.x, p.y, p.size * prog, 8)
-            end
-
-            -- 4. Ghost Danger HUD Indicator (Centered at top)
-            local num_g = #G.apagon_ghosts
-            local hud_col = (num_g >= 5) and {0.95, 0.2, 0.2, 0.95} or (num_g >= 3 and {0.95, 0.8, 0.15, 0.9} or {0.2, 0.9, 0.5, 0.85})
-            love.graphics.setBlendMode('alpha')
-            love.graphics.setColor(0.05, 0.05, 0.08, 0.85)
-            love.graphics.rectangle('fill', sw * 0.5 - 90, 16, 180, 32, 6)
-            love.graphics.setColor(hud_col[1], hud_col[2], hud_col[3], hud_col[4])
-            love.graphics.rectangle('line', sw * 0.5 - 90, 16, 180, 32, 6)
-            local ghost_text = "GHOSTS: " .. tostring(num_g) .. " / 7"
-            love.graphics.printf(ghost_text, sw * 0.5 - 90, 24, 180, "center")
+    end
+    if Game and Game.draw then
+        local orig_game_draw = Game.draw
+        function Game:draw(...)
+            orig_game_draw(self, ...)
+            render_apagon_overlay()
         end
-
-        love.graphics.pop()
     end
 end
