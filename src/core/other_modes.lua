@@ -84,22 +84,23 @@ register_reality_warp_game_mode({
 })
 
 register_reality_warp_game_mode({
-    id = 'chronos_rift',
-    title = 'CHRONOS RIFT',
-    badge = 'COMING SOON',
-    badge_colour = G.C.UI.BACKGROUND_INACTIVE,
+    id = 'apagon',
+    title = 'BLACKOUT',
+    badge = 'SURVIVAL',
+    badge_colour = HEX('d97706'),
     desc_lines = {
-        "Temporal anomalies & glitch dimensions.",
-        "Endless Boss Rush gauntlets.",
-        "Future game modes will unlock here."
+        "Total blackout engulfs the entire casino.",
+        "Your mouse becomes a lantern of burning embers.",
+        "Hover over cards and UI to pierce the dark.",
+        "Banish floating Ghost Jokers before 7 swarm!"
     },
     features = {
-        "Glitch Tear Distortion Mode",
-        "Automatically expands with updates"
+        "Dynamic Fiery Mouse Flashlight",
+        "Wandering Ghost Jokers Hunter (7 = Game Over)"
     },
-    button_label = 'LOCKED',
-    button_colour = G.C.UI.BACKGROUND_INACTIVE,
-    button_callback = 'reality_warp_noop',
+    button_label = 'PLAY BLACKOUT',
+    button_colour = HEX('d97706'),
+    button_callback = 'reality_warp_start_apagon_run',
     order = 4
 })
 

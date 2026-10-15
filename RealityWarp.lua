@@ -53,6 +53,7 @@ local files = {
     "src/core/black_market.lua",
     "src/core/cauldron_synthesis.lua",
     "src/core/other_modes.lua",
+    "src/core/apagon.lua",
 
     -- Jokers
     "src/jokers/common.lua",

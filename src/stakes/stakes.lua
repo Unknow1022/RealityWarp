@@ -445,7 +445,7 @@ if get_stake_sprite then
     end
 end
 
--- Hook: Draw fire effect on stake tower cards in run setup
+-- Hook: Draw fire effect on stake tower cards and stake stickers on cards
 local card_draw_stake_fire_ref = Card.draw
 function Card:draw(layer)
     if layer == 'card' and self.params and self.params.run_select_stake_tower then
@@ -457,6 +457,26 @@ function Card:draw(layer)
         end
     end
     card_draw_stake_fire_ref(self, layer)
+
+    -- Draw fire particles on stake stickers attached to cards/jokers/decks
+    if (layer == 'card' or layer == 'both' or not layer) and self.children and self.children.center then
+        local st = self.sticker or ((self.sticker_run and self.sticker_run ~= 'NONE') and G.SETTINGS and G.SETTINGS.run_stake_stickers and self.sticker_run)
+        if st then
+            local fire_col = STAKE_FIRE_COLORS[st]
+            if not fire_col then
+                local stripped = string.gsub(tostring(st), '_sticker$', '')
+                fire_col = STAKE_FIRE_COLORS[stripped]
+            end
+            if fire_col then
+                local center = self.children.center
+                local sw = center.VT.w * 0.55
+                local sh = center.VT.h * 0.55
+                local sx = center.VT.x + center.VT.w * 0.5 - sw * 0.5
+                local sy = center.VT.y + center.VT.h * 0.28 - sh * 0.5
+                draw_stake_fire(sx, sy, sw, sh, fire_col)
+            end
+        end
+    end
 end
 
 -- Hook: Amber Stake (no negative in shop) & Obsidian Stake (reduced edition rate)
