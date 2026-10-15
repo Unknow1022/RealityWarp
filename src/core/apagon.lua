@@ -35,7 +35,8 @@ local fire_loop_source = nil
 local function start_fire_loop()
     if fire_loop_source and fire_loop_source:isPlaying() then return end
     if not fire_loop_source then
-        local mod_path = (SMODS and SMODS.current_mod and SMODS.current_mod.path) or ""
+        local mod = (SMODS and (SMODS.current_mod or (SMODS.Mods and SMODS.Mods["reality_warp"])))
+        local mod_path = (mod and mod.path) or ""
         local candidates = {
             mod_path .. "assets/sounds/fire_loop.mp3",
             "assets/sounds/fire_loop.mp3",
@@ -47,6 +48,16 @@ local function start_fire_loop()
                 fire_loop_source = src
                 break
             end
+            if NFS and NFS.read then
+                local ok2, data = pcall(NFS.read, 'data', path)
+                if ok2 and data then
+                    local ok3, src2 = pcall(love.audio.newSource, data, "stream")
+                    if ok3 and src2 then
+                        fire_loop_source = src2
+                        break
+                    end
+                end
+            end
         end
     end
     if fire_loop_source then
@@ -55,6 +66,8 @@ local function start_fire_loop()
             fire_loop_source:setVolume(0.50)
             fire_loop_source:play()
         end)
+    else
+        pcall(play_sound, 'fire_loop', 1.0, 0.5)
     end
 end
 
@@ -74,8 +87,10 @@ local function get_random_apagon_deck_and_sleeve()
     local available_decks = {}
     if G.P_CENTER_POOLS and G.P_CENTER_POOLS['Back'] then
         for _, center in ipairs(G.P_CENTER_POOLS['Back']) do
-            if center and center.key and center.key ~= 'b_coliseo' then
-                table.insert(available_decks, center.key)
+            if center and center.key and center.key ~= 'b_coliseo' and center.key ~= 'b_reality_warp_coliseo' and center.key ~= 'b_challenge' then
+                if center.unlocked ~= false then
+                    table.insert(available_decks, center.key)
+                end
             end
         end
     end
@@ -93,7 +108,9 @@ local function get_random_apagon_deck_and_sleeve()
         local available_sleeves = {}
         for _, center in ipairs(G.P_CENTER_POOLS['Sleeve']) do
             if center and center.key and center.key ~= 'sleeve_casl_none' then
-                table.insert(available_sleeves, center.key)
+                if center.unlocked ~= false then
+                    table.insert(available_sleeves, center.key)
+                end
             end
         end
         if #available_sleeves > 0 then
@@ -142,10 +159,11 @@ G.FUNCS.reality_warp_start_apagon_run = function(e)
     if G.P_CENTERS and G.P_CENTERS[chosen_deck] and Back then
         G.GAME.selected_back = Back(G.P_CENTERS[chosen_deck])
         G.GAME.viewed_back = Back(G.P_CENTERS[chosen_deck])
+        G.viewed_back = Back(G.P_CENTERS[chosen_deck])
     end
 
     if G.FUNCS and G.FUNCS.start_run then
-        G.FUNCS.start_run(nil, run_args)
+        G.FUNCS.start_run(e or { config = {} }, run_args)
     end
     if G.GAME then
         G.GAME.apagon_active = true
@@ -164,7 +182,15 @@ function Game:start_run(args)
     if orig_game_start_run then orig_game_start_run(self, args) end
 
     if is_apagon then
-        if self.GAME then self.GAME.apagon_active = true end
+        if self.GAME then
+            self.GAME.apagon_active = true
+            if args and args.deck and G.P_CENTERS and G.P_CENTERS[args.deck] and Back then
+                self.GAME.selected_back = Back(G.P_CENTERS[args.deck])
+            end
+            if args and args.casl_sleeve_choice then
+                self.GAME.selected_sleeve = args.casl_sleeve_choice
+            end
+        end
         G.apagon_active = true
         G.apagon_intro_timer = 0
         G.apagon_lantern_on = false
@@ -186,6 +212,26 @@ function Game:main_menu(change_context)
     G.apagon_active = false
     G.apagon_starting = nil
     if orig_game_main_menu then orig_game_main_menu(self, change_context) end
+end
+
+if Game and Game.delete_run then
+    local orig_game_delete_run = Game.delete_run
+    function Game:delete_run(...)
+        stop_fire_loop()
+        G.apagon_active = false
+        G.apagon_starting = nil
+        return orig_game_delete_run(self, ...)
+    end
+end
+
+if G.FUNCS and G.FUNCS.go_to_menu then
+    local orig_go_to_menu = G.FUNCS.go_to_menu
+    G.FUNCS.go_to_menu = function(e)
+        stop_fire_loop()
+        G.apagon_active = false
+        G.apagon_starting = nil
+        orig_go_to_menu(e)
+    end
 end
 
 -- ----------------------------------------------------------------------------
@@ -214,8 +260,7 @@ function Game:update(dt)
         if G.apagon_intro_timer >= 1.2 then
             G.apagon_lantern_on = true
             -- Low-pitched chip sound when fire appears on screen
-            pcall(play_sound, 'chips1', 0.72, 0.9)
-            pcall(play_sound, 'tarot1', 1.3, 0.7)
+            pcall(play_sound, 'chips1', 0.72, 1.0)
             start_fire_loop()
 
             -- Initial fiery burst at mouse
