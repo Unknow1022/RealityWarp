@@ -197,7 +197,20 @@ function Game:start_run(args)
         G.apagon_ghosts = {}
         G.apagon_particles = {}
         G.apagon_dissolve_particles = {}
-        G.apagon_spawn_timer = 2.5
+
+        -- Immediately silence in-game music for Apagón run
+        if G.SOUND_MANAGER and G.SOUND_MANAGER.channel then
+            pcall(function()
+                G.SOUND_MANAGER.channel:push({
+                    type = 'modulate',
+                    desired_track = '',
+                    dt = 1.0,
+                    sound_settings = (G.SETTINGS and G.SETTINGS.SOUND) or { volume = 100, music_volume = 100, game_sounds_volume = 100 },
+                    pitch_mod = 1.0,
+                    splash_vol = 0
+                })
+            end)
+        end
     else
         stop_fire_loop()
         G.apagon_active = false
@@ -231,6 +244,68 @@ if G.FUNCS and G.FUNCS.go_to_menu then
         G.apagon_active = false
         G.apagon_starting = nil
         orig_go_to_menu(e)
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- Audio: Disable In-Game Music During Apagón Runs (Sound Effects Remain Active)
+-- ----------------------------------------------------------------------------
+
+if modulate_sound then
+    local orig_modulate_sound = modulate_sound
+    function modulate_sound(dt)
+        local is_apagon = G.apagon_active or (G.GAME and G.GAME.apagon_active)
+        if is_apagon then
+            local prev_video_soundtrack = G.video_soundtrack
+            G.video_soundtrack = ''
+            orig_modulate_sound(dt)
+            G.video_soundtrack = prev_video_soundtrack
+            return
+        end
+        return orig_modulate_sound(dt)
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- Ghost Spawner: 1 in 3 Chance Per Selected Blind
+-- ----------------------------------------------------------------------------
+
+local function spawn_apagon_ghost()
+    if #G.apagon_ghosts >= 7 then return end
+    local sw = (love.graphics and love.graphics.getWidth()) or 1536
+    local sh = (love.graphics and love.graphics.getHeight()) or 864
+    local mx, my = love.mouse.getPosition()
+
+    -- Spawn in deep shadows far from mouse cursor
+    local gx = (mx < sw * 0.5) and (sw - math.random(70, 160)) or math.random(70, 160)
+    local gy = (my < sh * 0.5) and (sh - math.random(90, 200)) or math.random(110, 230)
+    local j_key = JOKER_GHOST_KEYS[math.random(#JOKER_GHOST_KEYS)]
+
+    table.insert(G.apagon_ghosts, {
+        x = gx,
+        y = gy,
+        vx = (math.random() - 0.5) * 40,
+        vy = (math.random() - 0.5) * 40,
+        key = j_key,
+        health = 1.0,
+        max_health = 1.0,
+        seed = math.random(1, 99999),
+        hover_time = 0
+    })
+    pcall(play_sound, 'whoosh1', 0.85, 0.6)
+end
+
+if Blind and Blind.set_blind then
+    local orig_blind_set_blind = Blind.set_blind
+    function Blind:set_blind(blind, reset, silent)
+        local ret = orig_blind_set_blind(self, blind, reset, silent)
+        local is_active = G.apagon_active or (G.GAME and G.GAME.apagon_active)
+        if not reset and is_active then
+            if math.random(1, 3) == 1 then
+                spawn_apagon_ghost()
+            end
+        end
+        return ret
     end
 end
 
@@ -329,60 +404,65 @@ function Game:update(dt)
         end
     end
 
-    -- 3. Spawn wandering Ghost Jokers
-    local sw = love.graphics.getWidth()
-    local sh = love.graphics.getHeight()
-    G.apagon_spawn_timer = G.apagon_spawn_timer - dt
-
-    if G.apagon_spawn_timer <= 0 and #G.apagon_ghosts < 7 then
-        G.apagon_spawn_timer = 4.0 + math.random() * 3.0
-        local spawn_left = math.random() < 0.5
-        local gx = spawn_left and -50 or (sw + 50)
-        local gy = math.random(120, math.max(150, sh - 180))
-        local speed = 35 + math.random() * 45
-        local vx = spawn_left and speed or -speed
-        local vy = (math.random() - 0.5) * 30
-        local j_key = JOKER_GHOST_KEYS[math.random(#JOKER_GHOST_KEYS)]
-
-        table.insert(G.apagon_ghosts, {
-            x = gx,
-            y = gy,
-            vx = vx,
-            vy = vy,
-            base_y = gy,
-            key = j_key,
-            health = 1.0,
-            max_health = 1.0,
-            seed = math.random(1, 99999),
-            hover_time = 0
-        })
-        pcall(play_sound, 'whoosh1', 0.85, 0.6)
-    end
-
-    -- 4. Update Ghosts & Check Lantern Collision
-    local lantern_radius = 165 + math.sin(t * 5.0) * 8
+    -- 3. Update Ghosts & Check Lantern Collision
+    local lantern_radius = 215 + math.sin(t * 4.0) * 8
+    local flee_range = lantern_radius * 1.55
 
     for i = #G.apagon_ghosts, 1, -1 do
         local g = G.apagon_ghosts[i]
-        g.x = g.x + g.vx * dt
-        g.y = g.base_y + math.sin(t * 2.2 + g.seed) * 35
-
-        -- Bounce off screen edges
-        if g.x < 30 and g.vx < 0 then g.vx = -g.vx end
-        if g.x > sw - 30 and g.vx > 0 then g.vx = -g.vx end
-        if g.base_y < 100 then g.base_y = 100 end
-        if g.base_y > sh - 160 then g.base_y = sh - 160 end
-
-        -- Check distance to lantern
         local dx = g.x - mx
         local dy = g.y - my
         local dist = math.sqrt(dx * dx + dy * dy)
 
+        -- Flee and hide from the player's flashlight beam into darkness
+        if dist < flee_range and dist > 1 then
+            local flee_intensity = (1 - (dist / flee_range))
+            local flee_speed = flee_intensity * 330
+            local nx = dx / dist
+            local ny = dy / dist
+            local lateral_x = -ny * math.sin(t * 4.5 + g.seed) * 110
+            local lateral_y = nx * math.sin(t * 4.5 + g.seed) * 110
+            g.vx = g.vx + (nx * flee_speed + lateral_x) * dt
+            g.vy = g.vy + (ny * flee_speed + lateral_y) * dt
+        else
+            g.vx = g.vx * (1 - 0.6 * dt)
+            g.vy = g.vy * (1 - 0.6 * dt)
+        end
+
+        local cur_speed = math.sqrt(g.vx * g.vx + g.vy * g.vy)
+        if cur_speed > 230 then
+            g.vx = (g.vx / cur_speed) * 230
+            g.vy = (g.vy / cur_speed) * 230
+        elseif cur_speed < 20 then
+            local dir = (g.vx >= 0) and 1 or -1
+            g.vx = dir * 30
+        end
+
+        g.x = g.x + g.vx * dt
+        g.y = g.y + g.vy * dt
+
+        -- Boundary collision
+        local pad = 45
+        if g.x < pad then
+            g.x = pad
+            g.vx = math.abs(g.vx) * 0.8
+        elseif g.x > sw - pad then
+            g.x = sw - pad
+            g.vx = -math.abs(g.vx) * 0.8
+        end
+        if g.y < pad + 50 then
+            g.y = pad + 50
+            g.vy = math.abs(g.vy) * 0.8
+        elseif g.y > sh - pad - 50 then
+            g.y = sh - pad - 50
+            g.vy = -math.abs(g.vy) * 0.8
+        end
+
+        -- Shining lantern drains ghost health
         if dist <= lantern_radius then
-            -- Shining lantern on ghost drains its health!
-            g.health = g.health - dt / 1.15
+            local intensity = math.max(0.25, 1 - (dist / lantern_radius))
+            g.health = g.health - (dt / 1.35) * (0.5 + 0.8 * intensity)
             g.hover_time = g.hover_time + dt
-            -- Emit spectral spark particles
             table.insert(G.apagon_dissolve_particles, {
                 x = g.x + math.random(-25, 25),
                 y = g.y + math.random(-25, 25),
@@ -457,37 +537,52 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
         local scale = 0.85 + math.sin(t * 4.0 + g.seed) * 0.04
 
         if illuminated then
-            -- Full ghostly Joker inside lantern beam
+            -- Fade in visibility progressively as light touches the ghost
+            local light_factor = math.max(0.15, 1 - (dist / lantern_radius))
             love.graphics.setBlendMode('add', 'alphamultiply')
-            love.graphics.setColor(0.35, 0.75, 0.95, 0.55)
+            love.graphics.setColor(0.35, 0.75, 0.95, 0.55 * light_factor)
             love.graphics.circle('fill', 0, 0, 44 * scale, 32)
 
             -- Health bar when taking damage under lantern
             if g.health < 1.0 then
                 love.graphics.setBlendMode('alpha')
-                love.graphics.setColor(0.1, 0.1, 0.1, 0.85)
+                love.graphics.setColor(0.1, 0.1, 0.1, 0.85 * light_factor)
                 love.graphics.rectangle('fill', -26, -52, 52, 7, 2)
-                love.graphics.setColor(0.9, 0.2, 0.2, 0.95)
+                love.graphics.setColor(0.9, 0.2, 0.2, 0.95 * light_factor)
                 love.graphics.rectangle('fill', -26, -52, 52 * math.max(0, g.health), 7, 2)
-                love.graphics.setColor(1, 1, 1, 0.9)
+                love.graphics.setColor(1, 1, 1, 0.9 * light_factor)
                 love.graphics.rectangle('line', -26, -52, 52, 7, 2)
             end
 
             local center = G.P_CENTERS and G.P_CENTERS[g.key]
             if center and G.ASSET_ATLAS and G.ASSET_ATLAS[center.atlas or 'Joker'] then
                 local atlas = G.ASSET_ATLAS[center.atlas or 'Joker']
+                local pos_x = (center.pos and center.pos.x) or 0
+                local pos_y = (center.pos and center.pos.y) or 0
+                local px = atlas.px or 71
+                local py = atlas.py or 95
+                atlas.quads = atlas.quads or {}
+                local q_key = pos_x .. '_' .. pos_y
+                if not atlas.quads[q_key] and atlas.image then
+                    local iw, ih = atlas.image:getDimensions()
+                    atlas.quads[q_key] = love.graphics.newQuad(pos_x * px, pos_y * py, px, py, iw, ih)
+                end
                 love.graphics.setBlendMode('alpha')
-                love.graphics.setColor(0.85, 0.95, 1.0, 0.92)
-                love.graphics.draw(atlas.image, atlas.quads[center.pos.x .. '_' .. center.pos.y] or atlas.quads['1_0'], -35 * scale, -48 * scale, 0, scale, scale)
+                love.graphics.setColor(0.85, 0.95, 1.0, 0.92 * light_factor)
+                if atlas.quads[q_key] and atlas.image then
+                    love.graphics.draw(atlas.image, atlas.quads[q_key], -35 * scale, -48 * scale, 0, scale, scale)
+                else
+                    love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
+                end
             else
-                love.graphics.setColor(0.7, 0.9, 1.0, 0.92)
+                love.graphics.setColor(0.7, 0.9, 1.0, 0.92 * light_factor)
                 love.graphics.rectangle('fill', -24, -36, 48, 72, 6)
             end
         else
-            -- Outside lantern: faint spectral wisp visible through the pitch dark
+            -- Outside lantern: faint spectral wisp lurking in deep darkness
             love.graphics.setBlendMode('add', 'alphamultiply')
-            love.graphics.setColor(0.2, 0.5, 0.8, 0.18 + 0.06 * math.sin(t * 3.0 + g.seed))
-            love.graphics.circle('fill', 0, 0, 32 * scale, 24)
+            love.graphics.setColor(0.2, 0.5, 0.8, 0.14 + 0.05 * math.sin(t * 3.0 + g.seed))
+            love.graphics.circle('fill', 0, 0, 30 * scale, 24)
         end
 
         love.graphics.pop()
@@ -495,7 +590,7 @@ local function draw_apagon_ghosts(mx, my, lantern_radius)
 end
 
 -- ----------------------------------------------------------------------------
--- Darkness Canvas Generator
+-- Darkness Canvas & Progressive Radial Gradient
 -- ----------------------------------------------------------------------------
 
 local apagon_canvas = nil
@@ -504,6 +599,30 @@ local function get_apagon_canvas(w, h)
         apagon_canvas = love.graphics.newCanvas(w, h)
     end
     return apagon_canvas
+end
+
+local radial_lantern_img = nil
+local function get_radial_lantern_image()
+    if not radial_lantern_img then
+        local size = 256
+        local id = love.image.newImageData(size, size)
+        local center = size * 0.5
+        for y = 0, size - 1 do
+            for x = 0, size - 1 do
+                local dx = x - center + 0.5
+                local dy = y - center + 0.5
+                local norm_d = math.sqrt(dx * dx + dy * dy) / center
+                if norm_d > 1.0 then norm_d = 1.0 end
+                -- Progressive illumination falloff (quadratic curve)
+                -- Center is clear (alpha 0.0), smoothly darkens towards outer radius to 0.97
+                local falloff = norm_d * norm_d
+                local smooth_a = falloff * 0.97
+                id:setPixel(x, y, 0.012, 0.012, 0.022, smooth_a)
+            end
+        end
+        radial_lantern_img = love.graphics.newImage(id)
+    end
+    return radial_lantern_img
 end
 
 -- ----------------------------------------------------------------------------
@@ -524,34 +643,31 @@ local function render_apagon_overlay()
     local sw, sh = love.graphics.getDimensions()
     local mx, my = love.mouse.getPosition()
     local t = cur_t
-    local lantern_radius = 165 + math.sin(t * 5.0) * 8
+    local lantern_radius = 215 + math.sin(t * 4.0) * 8
 
     love.graphics.push('all')
     love.graphics.origin()
     love.graphics.setShader()
     love.graphics.setCanvas()
 
-    -- 1. Create and render darkness canvas with lantern aperture
+    -- 1. Create and render darkness canvas with progressive lantern aperture
     local canvas = get_apagon_canvas(sw, sh)
     love.graphics.setCanvas(canvas)
     love.graphics.clear(0, 0, 0, 0)
 
     -- Fill canvas with pitch darkness
-    love.graphics.setColor(0.012, 0.012, 0.022, 0.965)
+    love.graphics.setColor(0.012, 0.012, 0.022, 0.97)
     love.graphics.rectangle('fill', 0, 0, sw, sh)
 
     if G.apagon_lantern_on then
-        -- Cut out circular lantern aperture revealing UI underneath
-        love.graphics.setBlendMode('replace')
-        love.graphics.setColor(0, 0, 0, 0)
-        love.graphics.circle('fill', mx, my, lantern_radius, 64)
-
-        -- Feathered edge on the canvas
-        for fe = 1, 6 do
-            local r_fe = lantern_radius + fe * 4
-            local a_fe = (fe / 6) * 0.965
-            love.graphics.setColor(0.012, 0.012, 0.022, a_fe)
-            love.graphics.circle('line', mx, my, r_fe, 64)
+        -- Progressive soft radial aperture: center is transparent, smoothly darkens outwards
+        local r_img = get_radial_lantern_image()
+        if r_img then
+            love.graphics.setBlendMode('replace')
+            love.graphics.setColor(1, 1, 1, 1)
+            local iw = r_img:getWidth()
+            local s = (lantern_radius * 2) / iw
+            love.graphics.draw(r_img, mx, my, 0, s, s, iw * 0.5, iw * 0.5)
         end
     end
 
@@ -573,10 +689,12 @@ local function render_apagon_overlay()
 
     -- 4. Lantern effects at mouse cursor
     if G.apagon_lantern_on then
-        -- Soft atmospheric flashlight beam glow
+        -- Progressive warm ambient illumination
         love.graphics.setBlendMode('add', 'alphamultiply')
-        love.graphics.setColor(1.0, 0.65, 0.2, 0.08 + 0.03 * math.sin(t * 4.0))
-        love.graphics.circle('fill', mx, my, lantern_radius, 64)
+        love.graphics.setColor(1.0, 0.65, 0.2, 0.09 + 0.02 * math.sin(t * 4.0))
+        love.graphics.circle('fill', mx, my, lantern_radius * 0.45, 48)
+        love.graphics.setColor(1.0, 0.50, 0.15, 0.04 + 0.015 * math.sin(t * 4.0))
+        love.graphics.circle('fill', mx, my, lantern_radius * 0.8, 64)
 
         -- Fiery rising sparks at mouse cursor (Orange, Red, Yellow)
         for _, p in ipairs(G.apagon_particles) do
