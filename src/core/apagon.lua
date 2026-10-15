@@ -485,9 +485,9 @@ function Game:update(dt)
     end
 
     -- 3. Update Ghosts & Check Lantern Collision
-    local lantern_radius = 220 + math.sin(t * 4.0) * 8
-    local damage_radius = lantern_radius * 0.60
-    local flee_range = lantern_radius * 1.05
+    local lantern_radius = 290 + math.sin(t * 4.0) * 10
+    local damage_radius = 132 + math.sin(t * 4.0) * 5
+    local flee_range = lantern_radius * 0.95
 
     for i = #G.apagon_ghosts, 1, -1 do
         local g = G.apagon_ghosts[i]
@@ -813,7 +813,7 @@ local function render_apagon_overlay()
     local sw, sh = love.graphics.getDimensions()
     local mx, my = love.mouse.getPosition()
     local t = cur_t
-    local lantern_radius = 220 + math.sin(t * 4.0) * 8
+    local lantern_radius = 290 + math.sin(t * 4.0) * 10
 
     love.graphics.push('all')
     love.graphics.origin()
