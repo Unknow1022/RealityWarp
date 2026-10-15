@@ -305,24 +305,8 @@ if SMODS and SMODS.get_new_blind then
     end
 end
 
--- Palettes for Stake & Sticker Fire Effect (Dominant Color + Hot Core)
+-- Palettes for Mod Stake & Sticker Fire Effect (Reality Warp Exclusives only)
 local STAKE_FIRE_COLORS = {
-    -- Vanilla Stakes & Stickers
-    ['white']                      = { r = 0.95, g = 0.95, b = 0.95, core = {1.0, 1.0, 1.0} },
-    ['stake_white']                = { r = 0.95, g = 0.95, b = 0.95, core = {1.0, 1.0, 1.0} },
-    ['red']                        = { r = 0.95, g = 0.28, b = 0.28, core = {1.0, 0.70, 0.40} },
-    ['stake_red']                  = { r = 0.95, g = 0.28, b = 0.28, core = {1.0, 0.70, 0.40} },
-    ['blue']                       = { r = 0.25, g = 0.55, b = 0.95, core = {0.70, 0.90, 1.00} },
-    ['stake_blue']                 = { r = 0.25, g = 0.55, b = 0.95, core = {0.70, 0.90, 1.00} },
-    ['black']                      = { r = 0.30, g = 0.30, b = 0.36, core = {0.80, 0.35, 0.95} },
-    ['stake_black']                = { r = 0.30, g = 0.30, b = 0.36, core = {0.80, 0.35, 0.95} },
-    ['purple']                     = { r = 0.68, g = 0.30, b = 0.92, core = {0.92, 0.70, 1.00} },
-    ['stake_purple']               = { r = 0.68, g = 0.30, b = 0.92, core = {0.92, 0.70, 1.00} },
-    ['orange']                     = { r = 0.96, g = 0.55, b = 0.15, core = {1.00, 0.90, 0.45} },
-    ['stake_orange']               = { r = 0.96, g = 0.55, b = 0.15, core = {1.00, 0.90, 0.45} },
-    ['gold']                       = { r = 0.98, g = 0.82, b = 0.22, core = {1.00, 1.00, 0.70} },
-    ['stake_gold']                 = { r = 0.98, g = 0.82, b = 0.22, core = {1.00, 1.00, 0.70} },
-
     -- Reality Warp Custom Stakes & Stickers
     ['stake_reality_warp_diamond'] = { r = 0.37, g = 0.92, b = 0.83, core = {0.85, 1.0, 0.95} },
     ['reality_warp_diamond']       = { r = 0.37, g = 0.92, b = 0.83, core = {0.85, 1.0, 0.95} },
@@ -364,18 +348,14 @@ local STAKE_FIRE_COLORS = {
     ['reality_warp_celestial']     = { r = 0.85, g = 0.71, b = 0.89, core = {0.65, 0.92, 1.0} },
     ['celestial']                  = { r = 0.85, g = 0.71, b = 0.89, core = {0.65, 0.92, 1.0} },
 
-    -- Ability Stickers
-    ['eternal']                    = { r = 0.58, g = 0.22, b = 0.88, core = {1.0, 0.88, 0.35} },
-    ['perishable']                 = { r = 0.20, g = 0.72, b = 0.92, core = {0.80, 1.0, 1.0} },
-    ['rental']                     = { r = 0.95, g = 0.75, b = 0.15, core = {0.45, 1.0, 0.65} },
+    -- Mod Ability Sticker
     ['weakened']                   = { r = 0.58, g = 0.64, b = 0.72, core = {0.90, 0.92, 0.98} },
 }
 
 local function get_stake_fire_color(k)
     if not k then return nil end
     if type(k) == 'number' then
-        local vanilla = {'white', 'red', 'blue', 'black', 'purple', 'orange', 'gold'}
-        k = (G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake and G.P_CENTER_POOLS.Stake[k] and G.P_CENTER_POOLS.Stake[k].key) or vanilla[k] or tostring(k)
+        k = (G.P_CENTER_POOLS and G.P_CENTER_POOLS.Stake and G.P_CENTER_POOLS.Stake[k] and G.P_CENTER_POOLS.Stake[k].key) or tostring(k)
     end
     k = tostring(k)
     if STAKE_FIRE_COLORS[k] then return STAKE_FIRE_COLORS[k] end
@@ -515,49 +495,20 @@ function Card:draw(layer)
                 prep_draw(self, 1)
                 local sw = self.T.w * 0.36
                 local sh = self.T.h * 0.36
-                local sx = self.T.w * 0.19 - sw * 0.5
+                local sx = self.T.w * 0.81 - sw * 0.5
                 local sy = self.T.h * 0.16 - sh * 0.5
                 draw_stake_fire(sx, sy, sw, sh, fire_col)
                 love.graphics.pop()
             end
         end
 
-        if self.ability then
-            if self.ability.eternal then
-                local fire_col = get_stake_fire_color('eternal')
-                if fire_col then
-                    prep_draw(self, 1)
-                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
-                    draw_stake_fire(self.T.w * 0.82 - sw * 0.5, self.T.h * 0.16 - sh * 0.5, sw, sh, fire_col)
-                    love.graphics.pop()
-                end
-            end
-            if self.ability.perishable then
-                local fire_col = get_stake_fire_color('perishable')
-                if fire_col then
-                    prep_draw(self, 1)
-                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
-                    draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.16 - sh * 0.5, sw, sh, fire_col)
-                    love.graphics.pop()
-                end
-            end
-            if self.ability.rental then
-                local fire_col = get_stake_fire_color('rental')
-                if fire_col then
-                    prep_draw(self, 1)
-                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
-                    draw_stake_fire(self.T.w * 0.82 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
-                    love.graphics.pop()
-                end
-            end
-            if self.ability.weakened then
-                local fire_col = get_stake_fire_color('weakened')
-                if fire_col then
-                    prep_draw(self, 1)
-                    local sw, sh = self.T.w * 0.32, self.T.h * 0.32
-                    draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
-                    love.graphics.pop()
-                end
+        if self.ability and self.ability.weakened then
+            local fire_col = get_stake_fire_color('weakened')
+            if fire_col then
+                prep_draw(self, 1)
+                local sw, sh = self.T.w * 0.32, self.T.h * 0.32
+                draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
+                love.graphics.pop()
             end
         end
     end
