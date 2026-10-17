@@ -2512,17 +2512,51 @@ register_amalgam_joker {
     blueprint_compat = true,
     loc_vars = function(self, info_queue, card)
         local ex = (card and card.ability.extra) or self.config.extra
+        if G.GAME and G.GAME.current_round and G.GAME.current_round.rw_antique_suit_group then
+            ex.suit_group = G.GAME.current_round.rw_antique_suit_group
+        end
         return { vars = { ex.suit_group or 'Red' } }
+    end,
+    set_ability = function(self, card, initial, delay_sprites)
+        if card and card.ability and card.ability.extra then
+            if G.GAME and G.GAME.current_round and G.GAME.current_round.rw_antique_suit_group then
+                card.ability.extra.suit_group = G.GAME.current_round.rw_antique_suit_group
+            else
+                card.ability.extra.suit_group = card.ability.extra.suit_group or 'Red'
+            end
+        end
     end,
     calculate = function(self, card, context)
         if context.setting_blind and not context.blueprint then
-            card.ability.extra.suit_group = pseudorandom('antiguedad_group') < 0.5 and 'Red' or 'Black'
+            if not (G.GAME and G.GAME.current_round and G.GAME.current_round.rw_antique_rolled) then
+                if G.GAME and G.GAME.current_round then
+                    G.GAME.current_round.rw_antique_rolled = true
+                    G.GAME.current_round.rw_antique_suit_group = (pseudorandom('antiguedad_group') < 0.5) and 'Red' or 'Black'
+                end
+            end
+            local grp = (G.GAME and G.GAME.current_round and G.GAME.current_round.rw_antique_suit_group) or card.ability.extra.suit_group or 'Red'
+            card.ability.extra.suit_group = grp
+            if G.jokers and G.jokers.cards then
+                for _, j in ipairs(G.jokers.cards) do
+                    local k = j.config and j.config.center and j.config.center.key
+                    if (k == 'j_reality_warp_unrecognizable_antique' or k == 'unrecognizable_antique') and j.ability and j.ability.extra then
+                        j.ability.extra.suit_group = grp
+                    end
+                end
+            end
+        end
+        if context.end_of_round then
+            if G.GAME and G.GAME.current_round then
+                G.GAME.current_round.rw_antique_rolled = nil
+            end
         end
         if context.individual and context.cardarea == G.play then
+            local target_grp = (G.GAME and G.GAME.current_round and G.GAME.current_round.rw_antique_suit_group) or card.ability.extra.suit_group or 'Red'
+            card.ability.extra.suit_group = target_grp
             local other = context.other_card
             local s = other.base and other.base.suit
             local grp = (s == 'Hearts' or s == 'Diamonds') and 'Red' or 'Black'
-            if grp == (card.ability.extra.suit_group or 'Red') then
+            if grp == target_grp then
                 return {
                     x_mult = 2,
                     card = card
@@ -3338,7 +3372,7 @@ end
 local function pick_mew_mew_hand(card)
     local available = {}
     if G.GAME and G.GAME.hands then
-        local current = (card and card.ability and card.ability.extra and card.ability.extra.target_hand) or ''
+        local current = (G.GAME.current_round and G.GAME.current_round.mew_mew_hand) or (card and card.ability and card.ability.extra and card.ability.extra.target_hand) or ''
         for h, _ in pairs(G.GAME.hands) do
             if (not SMODS or not SMODS.is_poker_hand_visible or SMODS.is_poker_hand_visible(h)) and h ~= current then
                 table.insert(available, h)
@@ -3348,7 +3382,25 @@ local function pick_mew_mew_hand(card)
     if #available == 0 then
         available = { 'Pair', 'Two Pair', 'Three of a Kind', 'Full House', 'Flush', 'Straight' }
     end
-    return pseudorandom_element(available, 'mew_mew')
+    local hand = pseudorandom_element(available, 'mew_mew')
+    if G.GAME and G.GAME.current_round then
+        G.GAME.current_round.mew_mew_hand = hand
+    end
+    return hand
+end
+
+local function sync_all_mew_mew(chosen_hand)
+    if G.GAME and G.GAME.current_round and chosen_hand then
+        G.GAME.current_round.mew_mew_hand = chosen_hand
+    end
+    if G.jokers and G.jokers.cards then
+        for _, j in ipairs(G.jokers.cards) do
+            local k = j.config and j.config.center and j.config.center.key
+            if (k == 'j_reality_warp_mew_mew' or k == 'mew_mew') and j.ability and j.ability.extra then
+                j.ability.extra.target_hand = chosen_hand
+            end
+        end
+    end
 end
 
 local function spawn_mew_mew_heart_burst(card)
@@ -3488,6 +3540,9 @@ register_secret_joker {
     },
     loc_vars = function(self, info_queue, card)
         local ex = (card and card.ability and card.ability.extra) or self.config.extra
+        if G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_hand then
+            ex.target_hand = G.GAME.current_round.mew_mew_hand
+        end
         local xmult = ex.xmult or 1.5
         local gain = ex.xmult_gain or 0.25
         local target = ex.target_hand or 'Pair'
@@ -3499,7 +3554,9 @@ register_secret_joker {
     end,
     set_ability = function(self, card, initial, delay_sprites)
         if card and card.ability and card.ability.extra then
-            if not card.ability.extra.target_hand or card.ability.extra.target_hand == '' then
+            if G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_hand then
+                card.ability.extra.target_hand = G.GAME.current_round.mew_mew_hand
+            elseif not card.ability.extra.target_hand or card.ability.extra.target_hand == '' then
                 card.ability.extra.target_hand = 'Pair'
             end
             card.ability.extra.xmult = card.ability.extra.xmult or 1.5
@@ -3511,14 +3568,23 @@ register_secret_joker {
         if not ex then return end
 
         if context.setting_blind and not context.blueprint then
-            if not ex.target_hand or ex.target_hand == '' then
-                ex.target_hand = pick_mew_mew_hand(card)
+            if not (G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_hand) or not ex.target_hand or ex.target_hand == '' then
+                local h = pick_mew_mew_hand(card)
+                sync_all_mew_mew(h)
+            else
+                ex.target_hand = G.GAME.current_round.mew_mew_hand
             end
         end
 
         if context.before and not context.blueprint then
-            if not ex.target_hand or ex.target_hand == '' then
-                ex.target_hand = pick_mew_mew_hand(card)
+            if G.GAME and G.GAME.current_round then
+                G.GAME.current_round.mew_mew_rerolled_this_hand = nil
+            end
+            if not (G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_hand) or not ex.target_hand or ex.target_hand == '' then
+                local h = pick_mew_mew_hand(card)
+                sync_all_mew_mew(h)
+            else
+                ex.target_hand = G.GAME.current_round.mew_mew_hand
             end
             if context.scoring_name == ex.target_hand then
                 local old_xmult = ex.xmult or 1.5
@@ -3547,7 +3613,15 @@ register_secret_joker {
         end
 
         if context.after and not context.blueprint then
-            ex.target_hand = pick_mew_mew_hand(card)
+            if not (G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_rerolled_this_hand) then
+                if G.GAME and G.GAME.current_round then
+                    G.GAME.current_round.mew_mew_rerolled_this_hand = true
+                end
+                local h = pick_mew_mew_hand(card)
+                sync_all_mew_mew(h)
+            elseif G.GAME and G.GAME.current_round and G.GAME.current_round.mew_mew_hand then
+                ex.target_hand = G.GAME.current_round.mew_mew_hand
+            end
         end
     end
 }

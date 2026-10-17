@@ -365,62 +365,40 @@ end
 
 local function draw_stake_fire(x, y, w, h, col)
     if not love or not love.graphics or not col then return end
-    local t = love.timer and love.timer.getTime() or 0
+    local t = (love.timer and love.timer.getTime()) or (G.TIMERS and G.TIMERS.REAL) or 0
     local cx = x + w * 0.5
     local cy = y + h * 0.5
-    local base_r = math.min(w, h) * 0.50
+    local base_r = math.min(w, h) * 0.45
 
     love.graphics.push('all')
     love.graphics.setBlendMode('add', 'alphamultiply')
 
-    -- 1. Outer dynamic flame tongues dancing around perimeter
-    local num_flames = 14
-    for i = 1, num_flames do
-        local angle = (i / num_flames) * math.pi * 2 + math.sin(t * 2.2 + i) * 0.14
-        local flicker = math.sin(t * 7.0 + i * 2.1) * 0.30 + math.cos(t * 11.0 - i * 1.5) * 0.15
-        local upward_bias = -math.sin(angle) * 0.15
-        local flame_len = base_r * (1.18 + 0.30 * flicker + upward_bias)
+    -- Subtle soft ambient glow (low opacity, no fire tongues)
+    love.graphics.setColor(col.r, col.g, col.b, 0.12 + 0.04 * math.sin(t * 2.0))
+    love.graphics.circle('fill', cx, cy, base_r * 1.05, 24)
 
-        local fx = cx + math.cos(angle) * flame_len
-        local fy = cy + math.sin(angle) * flame_len
+    -- Tiny twinkling sparkle glints (small glitter particles)
+    local core_c = col.core or {1, 1, 1}
+    local num_sparkles = 4
+    for i = 1, num_sparkles do
+        local phase = i * (math.pi * 2 / num_sparkles)
+        local orbit_angle = phase + t * 0.6
+        local orbit_dist = base_r * (0.80 + 0.20 * math.sin(t * 1.5 + phase))
+        local px = cx + math.cos(orbit_angle) * orbit_dist
+        local py = cy + math.sin(orbit_angle) * orbit_dist
 
-        local tangent = angle + math.pi * 0.5
-        local hw = base_r * 0.22
-        local bx1 = cx + math.cos(angle) * (base_r * 0.80) + math.cos(tangent) * hw
-        local by1 = cy + math.sin(angle) * (base_r * 0.80) + math.sin(tangent) * hw
-        local bx2 = cx + math.cos(angle) * (base_r * 0.80) - math.cos(tangent) * hw
-        local by2 = cy + math.sin(angle) * (base_r * 0.80) - math.cos(tangent) * hw
+        local twinkle = 0.5 + 0.5 * math.sin(t * 3.5 + phase * 2.0)
+        local sz = base_r * (0.06 + 0.06 * twinkle)
+        local alpha = 0.35 + 0.45 * twinkle
 
-        love.graphics.setColor(col.r, col.g, col.b, 0.60 + 0.20 * math.sin(t * 4.5 + i))
-        love.graphics.polygon('fill', bx1, by1, fx, fy, bx2, by2)
+        -- Tiny 4-point sparkle cross
+        love.graphics.setColor(col.r, col.g, col.b, alpha * 0.7)
+        love.graphics.polygon('fill', px - sz * 0.25, py, px, py - sz, px + sz * 0.25, py, px, py + sz)
+        love.graphics.polygon('fill', px, py - sz * 0.25, px + sz, py, px, py + sz * 0.25, px - sz, py)
 
-        local core_c = col.core or {1, 1, 1}
-        local core_fx = cx + math.cos(angle) * (flame_len * 0.65)
-        local core_fy = cy + math.sin(angle) * (flame_len * 0.65)
-        love.graphics.setColor(core_c[1], core_c[2], core_c[3], 0.75 + 0.20 * math.cos(t * 5.5 + i))
-        love.graphics.polygon('fill', bx1, by1, core_fx, core_fy, bx2, by2)
-    end
-
-    -- 2. Radial flame glow rings
-    for ring = 1, 3 do
-        local r_mult = 1.0 + ring * 0.08 + math.sin(t * 3.5 + ring) * 0.04
-        local alpha = (0.35 / ring) * (0.8 + 0.2 * math.sin(t * 2.8 + ring * 1.2))
-        love.graphics.setColor(col.r, col.g, col.b, alpha)
-        love.graphics.circle('fill', cx, cy, base_r * r_mult, 32)
-    end
-
-    -- 3. Drifting sparks/embers
-    for spark = 1, 8 do
-        local st = (t * 1.5 + spark * 0.618) % 1.0
-        local s_angle = (spark * 0.785) + math.sin(t * 1.2 + spark) * 0.4
-        local s_dist = base_r * (0.90 + st * 0.60)
-        local sx = cx + math.cos(s_angle) * s_dist
-        local sy = cy + math.sin(s_angle) * s_dist - (st * base_r * 0.35)
-        local s_size = (1.0 - st) * (base_r * 0.12)
-        local s_alpha = (1.0 - st) * 0.85
-        local core_c = col.core or {1, 1, 1}
-        love.graphics.setColor(core_c[1], core_c[2], core_c[3], s_alpha)
-        love.graphics.circle('fill', sx, sy, math.max(0.015, s_size), 8)
+        -- Bright center dot
+        love.graphics.setColor(core_c[1], core_c[2], core_c[3], alpha)
+        love.graphics.circle('fill', px, py, sz * 0.3, 6)
     end
 
     love.graphics.pop()
@@ -480,23 +458,8 @@ function Card:draw(layer)
 
     card_draw_stake_fire_ref(self, layer)
 
-    -- Draw fire particles on stake win stickers and ability stickers attached to cards
+    -- Draw gentle sparkle particles on stake win stickers and ability stickers attached to cards
     if (layer == 'card' or layer == 'both' or not layer) and prep_draw then
-        local is_legendary = self.config and self.config.center and (
-            self.config.center.soul_pos or
-            self.config.center.rarity == 4 or
-            self.children.floating_sprite ~= nil or
-            self.config.center.legendary == true
-        )
-        local float_x, float_y, rot_mod, sc_mod = 0, 0, 0, 0
-        if is_legendary then
-            local real_t = (G.TIMERS and G.TIMERS.REAL) or (love.timer and love.timer.getTime()) or 0
-            sc_mod = 0.05 + 0.04 * math.sin(1.8 * real_t) + 0.04 * math.sin((real_t - math.floor(real_t)) * math.pi * 14) * (1 - (real_t - math.floor(real_t))) ^ 3
-            rot_mod = 0.08 * math.sin(1.219 * real_t) + 0.04 * math.sin(real_t * math.pi * 5) * (1 - (real_t - math.floor(real_t))) ^ 2
-            float_y = math.sin(1.8 * real_t) * (self.T.h * 0.035)
-            float_x = math.cos(1.219 * real_t) * (self.T.w * 0.02)
-        end
-
         local st = self.sticker
         if not st and self.config and self.config.center and get_joker_win_sticker then
             st = get_joker_win_sticker(self.config.center)
@@ -508,12 +471,6 @@ function Card:draw(layer)
             local fire_col = get_stake_fire_color(st)
             if fire_col then
                 prep_draw(self, 1)
-                if is_legendary then
-                    love.graphics.translate(self.T.w * 0.5 + float_x, self.T.h * 0.5 + float_y)
-                    love.graphics.rotate(rot_mod)
-                    love.graphics.scale(1 + sc_mod, 1 + sc_mod)
-                    love.graphics.translate(-self.T.w * 0.5, -self.T.h * 0.5)
-                end
                 local sw = self.T.w * 0.36
                 local sh = self.T.h * 0.36
                 local sx = self.T.w * 0.81 - sw * 0.5
@@ -527,12 +484,6 @@ function Card:draw(layer)
             local fire_col = get_stake_fire_color('weakened')
             if fire_col then
                 prep_draw(self, 1)
-                if is_legendary then
-                    love.graphics.translate(self.T.w * 0.5 + float_x, self.T.h * 0.5 + float_y)
-                    love.graphics.rotate(rot_mod)
-                    love.graphics.scale(1 + sc_mod, 1 + sc_mod)
-                    love.graphics.translate(-self.T.w * 0.5, -self.T.h * 0.5)
-                end
                 local sw, sh = self.T.w * 0.32, self.T.h * 0.32
                 draw_stake_fire(self.T.w * 0.18 - sw * 0.5, self.T.h * 0.82 - sh * 0.5, sw, sh, fire_col)
                 love.graphics.pop()

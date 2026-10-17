@@ -831,7 +831,7 @@ SMODS.Consumable {
         reality_warp_flip_apply({
             card = card,
             targets = target,
-            sound = 'dice',
+            sound = 'tarot1',
             apply = function(c)
                 clear_card_jobs(c)
                 local center = get_roulette_enhancement_center()

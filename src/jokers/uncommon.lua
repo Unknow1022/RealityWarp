@@ -916,11 +916,19 @@ SMODS.Joker {
 }
 
 local function ensure_charco_suit(card)
+    if not card then return end
     card.ability = card.ability or {}
     card.ability.extra = card.ability.extra or {}
+    if G.GAME and G.GAME.current_round and G.GAME.current_round.charco_suit then
+        card.ability.extra.suit = G.GAME.current_round.charco_suit
+        return
+    end
     if not card.ability.extra.suit then
         local suits = {'Hearts', 'Diamonds', 'Spades', 'Clubs'}
         card.ability.extra.suit = pseudorandom_element(suits, 'charco_init_suit') or 'Hearts'
+    end
+    if G.GAME and G.GAME.current_round then
+        G.GAME.current_round.charco_suit = card.ability.extra.suit
     end
 end
 
@@ -942,35 +950,61 @@ SMODS.Joker {
     blueprint_compat = true,
     loc_vars = function(self, info_queue, card)
         ensure_charco_suit(card)
-        local suit = card.ability.extra.suit or 'Hearts'
-        local mult_suit = card.ability.extra.mult_suit or 7
-        local mult_wild = card.ability.extra.mult_wild or 15
+        local suit = (G.GAME and G.GAME.current_round and G.GAME.current_round.charco_suit) or (card and card.ability and card.ability.extra and card.ability.extra.suit) or 'Hearts'
+        local mult_suit = (card and card.ability and card.ability.extra and card.ability.extra.mult_suit) or 7
+        local mult_wild = (card and card.ability and card.ability.extra and card.ability.extra.mult_wild) or 15
         return { vars = { suit, mult_suit, mult_wild } }
+    end,
+    set_ability = function(self, card, initial, delay_sprites)
+        ensure_charco_suit(card)
     end,
     calculate = function(self, card, context)
         ensure_charco_suit(card)
 
         if context.setting_blind and not context.blueprint then
-            local current_suit = card.ability.extra.suit
-            local available_suits = {}
-            local suits = {'Hearts', 'Diamonds', 'Spades', 'Clubs'}
-            for _, s in ipairs(suits) do
-                if s ~= current_suit then
-                    table.insert(available_suits, s)
+            if not (G.GAME and G.GAME.current_round and G.GAME.current_round.charco_suit_rolled) then
+                if G.GAME and G.GAME.current_round then
+                    G.GAME.current_round.charco_suit_rolled = true
+                    local current_suit = G.GAME.current_round.charco_suit or (card.ability and card.ability.extra and card.ability.extra.suit) or 'Hearts'
+                    local available_suits = {}
+                    local suits = {'Hearts', 'Diamonds', 'Spades', 'Clubs'}
+                    for _, s in ipairs(suits) do
+                        if s ~= current_suit then
+                            table.insert(available_suits, s)
+                        end
+                    end
+                    G.GAME.current_round.charco_suit = pseudorandom_element(available_suits, pseudoseed('charco_round_suit'))
                 end
             end
-            card.ability.extra.suit = pseudorandom_element(available_suits, pseudoseed('charco_round_suit'))
+            local chosen_suit = (G.GAME and G.GAME.current_round and G.GAME.current_round.charco_suit) or (card.ability and card.ability.extra and card.ability.extra.suit) or 'Hearts'
+            card.ability.extra.suit = chosen_suit
+            if G.jokers and G.jokers.cards then
+                for _, j in ipairs(G.jokers.cards) do
+                    local k = j.config and j.config.center and j.config.center.key
+                    if (k == 'j_reality_warp_paint_puddle_joker' or k == 'paint_puddle_joker') and j.ability and j.ability.extra then
+                        j.ability.extra.suit = chosen_suit
+                    end
+                end
+            end
             card_eval_status_text(card, 'extra', nil, nil, nil, { message = card.ability.extra.suit .. '!', colour = G.C.ATTENTION })
             card:juice_up(0.3, 0.3)
         end
 
+        if context.end_of_round then
+            if G.GAME and G.GAME.current_round then
+                G.GAME.current_round.charco_suit_rolled = nil
+            end
+        end
+
         if context.individual and context.cardarea == G.play then
+            local active_suit = (G.GAME and G.GAME.current_round and G.GAME.current_round.charco_suit) or (card.ability and card.ability.extra and card.ability.extra.suit) or 'Hearts'
+            card.ability.extra.suit = active_suit
             if is_wild_card(context.other_card) then
                 return {
                     mult = card.ability.extra.mult_wild,
                     card = card
                 }
-            elseif context.other_card:is_suit(card.ability.extra.suit) then
+            elseif context.other_card:is_suit(active_suit) then
                 return {
                     mult = card.ability.extra.mult_suit,
                     card = card

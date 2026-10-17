@@ -1016,15 +1016,14 @@ SMODS.Back {
     key = 'galactica',
     atlas = 'reality_warp_decks',
     pos = { x = 2, y = 3 },
-    config = { hand_size = -1 },
+    config = {},
     unlocked = true,
     discovered = true,
     loc_txt = {
         name = 'Galactic Deck',
         text = {
             "Start run with a random",
-            "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker,",
-            "{C:red}-1{} Hand Size"
+            "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker"
         }
     },
     loc_vars = function(self, info_queue, back)
@@ -1033,9 +1032,6 @@ SMODS.Back {
     apply = function(self, back)
         G.E_MANAGER:add_event(Event({
             func = function()
-                G.GAME.starting_params.hand_size = G.GAME.starting_params.hand_size - 1
-                G.hand:change_size(-1)
-
                 local pool = {}
                 if G.P_CENTERS then
                     for k, v in pairs(G.P_CENTERS) do
@@ -1237,16 +1233,14 @@ function inject_reality_warp_deck_localization()
             name = "Galactic Deck",
             text = {
                 "Start run with a random",
-                "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker,",
-                "{C:red}-1{} Hand Size"
+                "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker"
             }
         },
         galactica = {
             name = "Galactic Deck",
             text = {
                 "Start run with a random",
-                "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker,",
-                "{C:red}-1{} Hand Size"
+                "{C:attention}Outsider{} or {C:purple}Amalgam{} Joker"
             }
         }
     }
